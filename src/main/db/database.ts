@@ -24,6 +24,7 @@ export function initDatabase(): void {
   _db = drizzle(_sqlite, { schema })
 
   runMigrations()
+  runIncrementalMigrations()
   seedInitialData()
 }
 
@@ -235,7 +236,31 @@ function runMigrations(): void {
       detalle TEXT,
       fecha TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS cobranzas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+      monto REAL NOT NULL,
+      medio_pago TEXT NOT NULL DEFAULT 'efectivo',
+      observacion TEXT,
+      fecha TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
   `)
+}
+
+function runIncrementalMigrations(): void {
+  if (!_sqlite) return
+  // ALTER TABLE only if column doesn't exist (SQLite workaround)
+  const alterIfMissing = (table: string, column: string, definition: string) => {
+    const cols = (_sqlite!.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(c => c.name)
+    if (!cols.includes(column)) {
+      _sqlite!.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+    }
+  }
+  alterIfMissing('clientes', 'activo', 'INTEGER NOT NULL DEFAULT 1')
+  alterIfMissing('clientes', 'limite_credito', 'REAL NOT NULL DEFAULT 0')
+  alterIfMissing('proveedores', 'activo', 'INTEGER NOT NULL DEFAULT 1')
 }
 
 function seedInitialData(): void {

@@ -5,15 +5,23 @@ import { ProductosPage } from './ProductosPage'
 import { StockPage } from './StockPage'
 import { CajaPage } from './CajaPage'
 import { ConfigPage } from './ConfigPage'
+import { ReportesPage } from './ReportesPage'
+import { ClientesPage } from './ClientesPage'
+import { ProveedoresPage } from './ProveedoresPage'
+import { UsuariosPage } from './UsuariosPage'
 
-type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config'
+type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios'
 
-const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string }[] = [
-  { key: 'pos',       label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1'  },
-  { key: 'productos', label: 'Productos',       icon: '📦', shortcut: 'F2',  fkey: 'F2'  },
-  { key: 'stock',     label: 'Stock',           icon: '📊', shortcut: 'F3',  fkey: 'F3'  },
-  { key: 'caja',      label: 'Caja',            icon: '💰', shortcut: 'F4',  fkey: 'F4'  },
-  { key: 'config',    label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10' },
+const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string; adminOnly?: boolean }[] = [
+  { key: 'pos',         label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1'  },
+  { key: 'productos',   label: 'Productos',       icon: '📦', shortcut: 'F2',  fkey: 'F2'  },
+  { key: 'stock',       label: 'Stock',           icon: '📊', shortcut: 'F3',  fkey: 'F3'  },
+  { key: 'caja',        label: 'Caja',            icon: '💰', shortcut: 'F4',  fkey: 'F4'  },
+  { key: 'clientes',    label: 'Clientes',        icon: '👥', shortcut: 'F5',  fkey: 'F5'  },
+  { key: 'proveedores', label: 'Proveedores',     icon: '🏭', shortcut: 'F6',  fkey: 'F6'  },
+  { key: 'reportes',    label: 'Reportes',        icon: '📈', shortcut: 'F7',  fkey: 'F7'  },
+  { key: 'usuarios',    label: 'Usuarios',        icon: '👤', shortcut: 'F8',  fkey: 'F8',  adminOnly: true },
+  { key: 'config',      label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10' },
 ]
 
 export function MainLayout(): JSX.Element {
@@ -30,6 +38,8 @@ export function MainLayout(): JSX.Element {
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
+  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || usuario?.rol === 'admin')
+
   return (
     <div className="flex h-screen bg-slate-100">
       {/* Sidebar */}
@@ -42,8 +52,8 @@ export function MainLayout(): JSX.Element {
           </span>
         </div>
 
-        <nav className="flex-1 py-4 space-y-1 px-2">
-          {NAV_ITEMS.map((item) => (
+        <nav className="flex-1 py-4 space-y-0.5 px-2 overflow-y-auto">
+          {visibleItems.map((item) => (
             <button
               key={item.key}
               onClick={() => setSection(item.key)}
@@ -70,11 +80,15 @@ export function MainLayout(): JSX.Element {
 
       {/* Content */}
       <main className="flex-1 overflow-auto p-6">
-        {section === 'pos'       && <PuntoVentaPage />}
-        {section === 'productos' && <ProductosPage />}
-        {section === 'stock'     && <StockPage />}
-        {section === 'caja'      && <CajaPage />}
-        {section === 'config'    && <ConfigPage />}
+        {section === 'pos'         && <PuntoVentaPage />}
+        {section === 'productos'   && <ProductosPage />}
+        {section === 'stock'       && <StockPage />}
+        {section === 'caja'        && <CajaPage />}
+        {section === 'clientes'    && <ClientesPage />}
+        {section === 'proveedores' && <ProveedoresPage />}
+        {section === 'reportes'    && <ReportesPage />}
+        {section === 'usuarios'    && <UsuariosPage />}
+        {section === 'config'      && <ConfigPage />}
       </main>
     </div>
   )

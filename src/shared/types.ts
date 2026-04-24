@@ -143,3 +143,111 @@ export interface Caja {
   sucursalId: number
   nombre: string
 }
+
+export interface Cliente {
+  id: number
+  negocioId: number
+  nombre: string
+  cuitDni: string | null
+  telefono: string | null
+  email: string | null
+  condicionAfip: 'monotributo' | 'responsable_inscripto' | 'exento' | 'consumidor_final'
+  limiteCredito: number
+  saldoCuentaCorriente: number
+  activo: boolean
+}
+
+export interface Proveedor {
+  id: number
+  negocioId: number
+  nombre: string
+  cuit: string | null
+  telefono: string | null
+  email: string | null
+  condicionPago: string | null
+  activo: boolean
+}
+
+export interface OrdenCompra {
+  id: number
+  proveedorId: number
+  nombreProveedor: string
+  usuarioId: number
+  fecha: string
+  total: number
+  estado: 'pendiente' | 'recibida' | 'cancelada'
+}
+
+export interface ItemOrdenCompra {
+  productoId: number
+  nombreProducto: string
+  cantidad: number
+  precioUnitario: number
+  subtotal: number
+}
+
+export interface NuevaCompraRequest {
+  proveedorId: number
+  usuarioId: number
+  items: { productoId: number; cantidad: number; precioUnitario: number; subtotal: number }[]
+}
+
+// Reportes
+
+export interface FilaVentaReporte {
+  id: number
+  fecha: string
+  total: number
+  subtotal: number
+  descuentoTotal: number
+  tipoComprobante: string
+  estado: string
+  usuarioId: number
+  nombreUsuario: string
+}
+
+export interface GrupoVentasReporte {
+  periodo: string
+  total: number
+  cantidad: number
+  subtotal: number
+  descuentos: number
+}
+
+export interface ResumenVentasReporte {
+  totalVentas: number
+  totalRecaudado: number
+  ticketPromedio: number
+  totalDescuentos: number
+}
+
+export interface RankingProducto {
+  posicion: number
+  productoId: number
+  nombre: string
+  codigoBarras: string | null
+  precioVenta: number
+  cantidadVendida: number
+  totalVendido: number
+  apariciones: number
+}
+
+export interface MedioPagoReporte {
+  medioPago: string
+  cantidad: number
+  total: number
+}
+
+export interface ProductoStockValorizado {
+  id: number
+  nombre: string
+  codigoBarras: string | null
+  categoria: string | null
+  stockActual: number
+  stockMinimo: number
+  precioCosto: number
+  precioVenta: number
+  valorCosto: number
+  valorVenta: number
+  bajoMinimo: boolean
+}

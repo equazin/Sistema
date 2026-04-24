@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { formatPrecio, formatFecha } from '../lib/format'
+import { invoke } from '../lib/api'
 
 const CAJA_ID = 1
 
@@ -69,9 +70,18 @@ export function CajaPage(): JSX.Element {
               valueClass={dif === 0 ? 'text-green-600' : dif > 0 ? 'text-blue-600' : 'text-red-500'}
             />
           </div>
-          <Button className="mt-6 w-full" onClick={() => setTurnoRecienCerrado(null)}>
-            Cerrar
-          </Button>
+          <div className="flex gap-3 mt-6">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => invoke('impresion:ticketCierre', { turnoId: turnoRecienCerrado.id })}
+            >
+              🖨️ Imprimir cierre
+            </Button>
+            <Button className="flex-1" onClick={() => setTurnoRecienCerrado(null)}>
+              Cerrar
+            </Button>
+          </div>
         </div>
       </div>
     )

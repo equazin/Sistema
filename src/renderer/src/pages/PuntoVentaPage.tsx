@@ -5,6 +5,7 @@ import { useCajaStore } from '../stores/caja.store'
 import { useAuthStore } from '../stores/auth.store'
 import { Button } from '../components/ui/Button'
 import { formatPrecio } from '../lib/format'
+import { invoke } from '../lib/api'
 import type { Producto, MedioPago } from '../../../shared/types'
 
 const MEDIOS_PAGO: { key: MedioPago; label: string; icon: string }[] = [
@@ -308,8 +309,17 @@ export function PuntoVentaPage(): JSX.Element {
             <div className="flex-1" />
 
             {ventaCompletada ? (
-              <div className="bg-green-500 text-white rounded-xl p-4 text-center font-bold text-lg">
-                ✓ Venta completada #{ventaCompletada}
+              <div className="flex flex-col gap-2">
+                <div className="bg-green-500 text-white rounded-xl p-4 text-center font-bold text-lg">
+                  ✓ Venta completada #{ventaCompletada}
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => invoke('impresion:ticketVenta', { ventaId: ventaCompletada })}
+                  className="w-full"
+                >
+                  🖨️ Imprimir ticket
+                </Button>
               </div>
             ) : (
               <>

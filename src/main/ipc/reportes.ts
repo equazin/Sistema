@@ -1,0 +1,170 @@
+import { handle } from './base'
+import { getSqlite } from '../db/database'
+
+export function registerReportesHandlers(): void {
+  handle('reportes:ventas', ({ desde, hasta, agruparPor }) => {
+    const db = getSqlite()
+
+    const filas = db.prepare(`
+      SELECT
+        v.id,
+        v.fecha,
+        v.total,
+        v.subtotal,
+        v.descuento_total,
+        v.tipo_comprobante,
+        v.estado,
+        v.usuario_id,
+        u.nombre AS nombre_usuario
+      FROM ventas v
+      LEFT JOIN usuarios u ON u.id = v.usuario_id
+      WHERE date(v.fecha) >= date(?)
+        AND date(v.fecha) <= date(?)
+        AND v.estado = 'completada'
+      ORDER BY v.fecha ASC
+    `).all(desde, hasta) as Record<string, unknown>[]
+
+    // Agrupar por día, semana o mes
+    const grupos: Record<string, { periodo: string; total: number; cantidad: number; subtotal: number; descuentos: number }> = {}
+    for (const f of filas) {
+      const fecha = String(f.fecha)
+      let periodo: string
+      if (agruparPor === 'mes') {
+        periodo = fecha.slice(0, 7) // YYYY-MM
+      } else if (agruparPor === 'semana') {
+        const d = new Date(fecha)
+        const dow = d.getDay() === 0 ? 7 : d.getDay()
+        const lunes = new Date(d)
+        lunes.setDate(d.getDate() - dow + 1)
+        periodo = lunes.toISOString().slice(0, 10)
+      } else {
+        periodo = fecha.slice(0, 10)
+      }
+      if (!grupos[periodo]) grupos[periodo] = { periodo, total: 0, cantidad: 0, subtotal: 0, descuentos: 0 }
+      grupos[periodo].total += f.total as number
+      grupos[periodo].cantidad += 1
+      grupos[periodo].subtotal += f.subtotal as number
+      grupos[periodo].descuentos += f.descuento_total as number
+    }
+
+    const ventasTotales = filas.reduce((s, f) => s + (f.total as number), 0)
+    const ticketPromedio = filas.length > 0 ? ventasTotales / filas.length : 0
+
+    return {
+      filas: filas.map(f => ({
+        id: f.id as number,
+        fecha: f.fecha as string,
+        total: f.total as number,
+        subtotal: f.subtotal as number,
+        descuentoTotal: f.descuento_total as number,
+        tipoComprobante: f.tipo_comprobante as string,
+        estado: f.estado as string,
+        usuarioId: f.usuario_id as number,
+        nombreUsuario: f.nombre_usuario as string,
+      })),
+      grupos: Object.values(grupos).sort((a, b) => a.periodo.localeCompare(b.periodo)),
+      resumen: {
+        totalVentas: filas.length,
+        totalRecaudado: ventasTotales,
+        ticketPromedio,
+        totalDescuentos: filas.reduce((s, f) => s + (f.descuento_total as number), 0),
+      },
+    }
+  })
+
+  handle('reportes:ranking', ({ desde, hasta, limit }) => {
+    const db = getSqlite()
+    const rows = db.prepare(`
+      SELECT
+        p.id,
+        p.nombre,
+        p.codigo_barras,
+        p.precio_venta,
+        SUM(iv.cantidad) AS cantidad_vendida,
+        SUM(iv.subtotal) AS total_vendido,
+        COUNT(DISTINCT iv.venta_id) AS apariciones
+      FROM items_venta iv
+      JOIN productos p ON p.id = iv.producto_id
+      JOIN ventas v ON v.id = iv.venta_id
+      WHERE date(v.fecha) >= date(?)
+        AND date(v.fecha) <= date(?)
+        AND v.estado = 'completada'
+      GROUP BY p.id
+      ORDER BY total_vendido DESC
+      LIMIT ?
+    `).all(desde, hasta, limit ?? 20) as Record<string, unknown>[]
+
+    return rows.map((r, i) => ({
+      posicion: i + 1,
+      productoId: r.id as number,
+      nombre: r.nombre as string,
+      codigoBarras: r.codigo_barras as string | null,
+      precioVenta: r.precio_venta as number,
+      cantidadVendida: r.cantidad_vendida as number,
+      totalVendido: r.total_vendido as number,
+      apariciones: r.apariciones as number,
+    }))
+  })
+
+  handle('reportes:porMedioPago', ({ desde, hasta }) => {
+    const db = getSqlite()
+    const rows = db.prepare(`
+      SELECT
+        pv.medio_pago,
+        COUNT(DISTINCT pv.venta_id) AS cantidad,
+        SUM(pv.monto) AS total
+      FROM pagos_venta pv
+      JOIN ventas v ON v.id = pv.venta_id
+      WHERE date(v.fecha) >= date(?)
+        AND date(v.fecha) <= date(?)
+        AND v.estado = 'completada'
+      GROUP BY pv.medio_pago
+      ORDER BY total DESC
+    `).all(desde, hasta) as Record<string, unknown>[]
+
+    return rows.map(r => ({
+      medioPago: r.medio_pago as string,
+      cantidad: r.cantidad as number,
+      total: r.total as number,
+    }))
+  })
+
+  handle('reportes:stockValorizado', () => {
+    const db = getSqlite()
+    const rows = db.prepare(`
+      SELECT
+        p.id,
+        p.nombre,
+        p.codigo_barras,
+        p.stock_actual,
+        p.stock_minimo,
+        p.precio_costo,
+        p.precio_venta,
+        c.nombre AS categoria
+      FROM productos p
+      LEFT JOIN categorias c ON c.id = p.categoria_id
+      WHERE p.activo = 1
+      ORDER BY (p.stock_actual * p.precio_costo) DESC
+    `).all() as Record<string, unknown>[]
+
+    const total = rows.reduce((s, r) => s + (r.stock_actual as number) * (r.precio_costo as number), 0)
+
+    return {
+      productos: rows.map(r => ({
+        id: r.id as number,
+        nombre: r.nombre as string,
+        codigoBarras: r.codigo_barras as string | null,
+        categoria: r.categoria as string | null,
+        stockActual: r.stock_actual as number,
+        stockMinimo: r.stock_minimo as number,
+        precioCosto: r.precio_costo as number,
+        precioVenta: r.precio_venta as number,
+        valorCosto: (r.stock_actual as number) * (r.precio_costo as number),
+        valorVenta: (r.stock_actual as number) * (r.precio_venta as number),
+        bajoMinimo: (r.stock_actual as number) < (r.stock_minimo as number),
+      })),
+      totalValorCosto: total,
+      totalValorVenta: rows.reduce((s, r) => s + (r.stock_actual as number) * (r.precio_venta as number), 0),
+    }
+  })
+}
