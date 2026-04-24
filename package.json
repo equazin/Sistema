@@ -1,0 +1,70 @@
+{
+  "name": "sistema-pos",
+  "version": "1.0.0",
+  "description": "Sistema POS para comercios argentinos",
+  "main": "./out/main/index.js",
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "npm run build && electron-builder",
+    "postinstall": "cd node_modules/better-sqlite3 && npx prebuild-install --runtime electron --target 41.3.0 --arch x64 --platform win32 || electron-rebuild -f -w better-sqlite3",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@electron-toolkit/tsconfig": "^2.0.0",
+    "better-sqlite3": "^12.9.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.36.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.27.0",
+    "tailwind-merge": "^2.5.5",
+    "zustand": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.28.1",
+    "electron": "^41.3.0",
+    "electron-builder": "^25.1.8",
+    "electron-rebuild": "^3.2.9",
+    "electron-vite": "^2.3.0",
+    "postcss": "^8.4.49",
+    "prebuild-install": "^7.1.2",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  },
+  "build": {
+    "appId": "com.sistemapos.app",
+    "productName": "Sistema POS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    },
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources"
+      }
+    ]
+  }
+}
