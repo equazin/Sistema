@@ -6,3 +6,6 @@ dist/
 *.db-wal
 .env
 .env.local
+*.tsbuildinfo
+test*.cjs
+.claude/settings.local.json
