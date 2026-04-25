@@ -15,12 +15,15 @@ export type Permiso =
   | 'precios:actualizar'
   | 'config:gestionar'
   | 'auditoria:ver'
+  | 'sucursales:gestionar'
+  | 'stock:transferir'
 
 const PERMISOS_POR_ROL: Record<RolUsuario, readonly Permiso[]> = {
   admin: [
     'pos:usar',
     'productos:gestionar',
     'stock:ajustar',
+    'stock:transferir',
     'caja:abrir',
     'caja:cerrar',
     'clientes:gestionar',
@@ -32,11 +35,13 @@ const PERMISOS_POR_ROL: Record<RolUsuario, readonly Permiso[]> = {
     'precios:actualizar',
     'config:gestionar',
     'auditoria:ver',
+    'sucursales:gestionar',
   ],
   encargado: [
     'pos:usar',
     'productos:gestionar',
     'stock:ajustar',
+    'stock:transferir',
     'caja:abrir',
     'caja:cerrar',
     'clientes:gestionar',

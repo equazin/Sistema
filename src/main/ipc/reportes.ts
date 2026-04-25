@@ -176,6 +176,43 @@ export function registerReportesHandlers(): void {
     }
   })
 
+  handle('reportes:multisucursal', ({ desde, hasta }) => {
+    const db = getSqlite()
+    const rows = db.prepare(`
+      SELECT
+        s.id AS sucursal_id,
+        s.nombre AS nombre_sucursal,
+        COUNT(v.id) AS cantidad_ventas,
+        COALESCE(SUM(v.total), 0) AS total_ventas
+      FROM sucursales s
+      LEFT JOIN cajas c ON c.sucursal_id = s.id
+      LEFT JOIN turnos_caja t ON t.caja_id = c.id
+      LEFT JOIN ventas v ON v.turno_id = t.id AND v.estado = 'completada' AND v.fecha BETWEEN ? AND ?
+      WHERE s.activa = 1
+      GROUP BY s.id
+      ORDER BY total_ventas DESC
+    `).all(desde, hasta) as Record<string, unknown>[]
+
+    const porSucursal = rows.map(r => ({
+      sucursalId: r.sucursal_id as number,
+      nombreSucursal: r.nombre_sucursal as string,
+      totalVentas: r.total_ventas as number,
+      cantidadVentas: r.cantidad_ventas as number,
+      ticketPromedio: (r.cantidad_ventas as number) > 0 ? (r.total_ventas as number) / (r.cantidad_ventas as number) : 0,
+    }))
+
+    const totalVentas = porSucursal.reduce((s, r) => s + r.totalVentas, 0)
+    const cantidadVentas = porSucursal.reduce((s, r) => s + r.cantidadVentas, 0)
+    return {
+      porSucursal,
+      totales: {
+        totalVentas,
+        cantidadVentas,
+        ticketPromedio: cantidadVentas > 0 ? totalVentas / cantidadVentas : 0,
+      },
+    }
+  })
+
   handle('reportes:stockValorizado', () => {
     const db = getSqlite()
     const rows = db.prepare(`

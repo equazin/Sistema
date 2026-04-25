@@ -11,9 +11,11 @@ import { ProveedoresPage } from './ProveedoresPage'
 import { UsuariosPage } from './UsuariosPage'
 import { PromocionesPage } from './PromocionesPage'
 import { PreciosMasivoPage } from './PreciosMasivoPage'
+import { SucursalesPage } from './SucursalesPage'
+import { TransferenciasPage } from './TransferenciasPage'
 import { tienePermiso, type Permiso } from '../../../shared/permissions'
 
-type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios' | 'promociones' | 'precios'
+type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios' | 'promociones' | 'precios' | 'sucursales' | 'transferencias'
 
 const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string; permiso: Permiso }[] = [
   { key: 'pos',         label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1',  permiso: 'pos:usar' },
@@ -25,8 +27,10 @@ const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; 
   { key: 'reportes',    label: 'Reportes',        icon: '📈', shortcut: 'F7',  fkey: 'F7',  permiso: 'reportes:ver' },
   { key: 'usuarios',    label: 'Usuarios',        icon: '👤', shortcut: 'F8',  fkey: 'F8',  permiso: 'usuarios:gestionar' },
   { key: 'promociones', label: 'Promociones',     icon: '🏷️', shortcut: 'F9',  fkey: 'F9',  permiso: 'promociones:gestionar' },
-  { key: 'precios',     label: 'Precios masivos', icon: '💲', shortcut: '',    fkey: '',    permiso: 'precios:actualizar' },
-  { key: 'config',      label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10', permiso: 'config:gestionar' },
+  { key: 'precios',        label: 'Precios masivos',  icon: '💲', shortcut: '',    fkey: '',    permiso: 'precios:actualizar' },
+  { key: 'sucursales',    label: 'Sucursales',       icon: '🏪', shortcut: '',    fkey: '',    permiso: 'sucursales:gestionar' },
+  { key: 'transferencias', label: 'Transferencias',  icon: '🔄', shortcut: '',    fkey: '',    permiso: 'stock:transferir' },
+  { key: 'config',         label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10', permiso: 'config:gestionar' },
 ]
 
 export function MainLayout(): JSX.Element {
@@ -103,8 +107,10 @@ export function MainLayout(): JSX.Element {
         {section === 'reportes'    && <ReportesPage />}
         {section === 'usuarios'    && <UsuariosPage />}
         {section === 'promociones' && <PromocionesPage />}
-        {section === 'precios'     && <PreciosMasivoPage />}
-        {section === 'config'      && <ConfigPage />}
+        {section === 'precios'        && <PreciosMasivoPage />}
+        {section === 'sucursales'    && <SucursalesPage />}
+        {section === 'transferencias' && <TransferenciasPage />}
+        {section === 'config'         && <ConfigPage />}
       </main>
     </div>
   )

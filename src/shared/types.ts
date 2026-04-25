@@ -340,3 +340,52 @@ export interface FilaCuentaCorrienteReporte {
   totalCobradoPeriodo: number
   cantidadVentas: number
 }
+
+// Multisucursal
+
+export type EstadoTransferencia = 'pendiente' | 'en_transito' | 'recibida' | 'cancelada'
+
+export interface TransferenciaStock {
+  id: number
+  sucursalOrigenId: number
+  nombreOrigen: string
+  sucursalDestinoId: number
+  nombreDestino: string
+  usuarioId: number
+  estado: EstadoTransferencia
+  observacion: string | null
+  fecha: string
+  fechaRecepcion: string | null
+}
+
+export interface ItemTransferencia {
+  productoId: number
+  nombreProducto: string
+  cantidad: number
+}
+
+export interface NuevaTransferenciaRequest {
+  sucursalOrigenId: number
+  sucursalDestinoId: number
+  usuarioId: number
+  observacion?: string
+  items: { productoId: number; cantidad: number }[]
+}
+
+export interface ResumenSucursalReporte {
+  sucursalId: number
+  nombreSucursal: string
+  totalVentas: number
+  cantidadVentas: number
+  ticketPromedio: number
+}
+
+export interface SyncOutboxEntry {
+  id: number
+  sucursalId: number
+  tabla: string
+  operacion: 'INSERT' | 'UPDATE' | 'DELETE'
+  payload: string
+  createdAt: string
+  syncedAt: string | null
+}

@@ -309,6 +309,61 @@ export interface IpcChannelMap {
     request: Record<string, never>
     response: { nombre: string; path: string; tamaño: number; fecha: string }[]
   }
+  // Sucursales (multisucursal)
+  'sucursales:list': {
+    request: Record<string, never>
+    response: import('./types').Sucursal[]
+  }
+  'sucursales:create': {
+    request: { nombre: string; domicilio?: string }
+    response: import('./types').Sucursal
+  }
+  'sucursales:update': {
+    request: { id: number; nombre?: string; domicilio?: string; activa?: boolean }
+    response: import('./types').Sucursal
+  }
+  'sucursales:delete': {
+    request: { id: number }
+    response: void
+  }
+  // Transferencias de stock
+  'transferencias:list': {
+    request: { sucursalId?: number }
+    response: import('./types').TransferenciaStock[]
+  }
+  'transferencias:get': {
+    request: { id: number }
+    response: import('./types').TransferenciaStock & { items: import('./types').ItemTransferencia[] }
+  }
+  'transferencias:crear': {
+    request: import('./types').NuevaTransferenciaRequest
+    response: import('./types').TransferenciaStock
+  }
+  'transferencias:recibir': {
+    request: { id: number; usuarioId: number }
+    response: void
+  }
+  'transferencias:cancelar': {
+    request: { id: number; usuarioId: number }
+    response: void
+  }
+  // Sync engine (outbox/pull)
+  'sync:pendientes': {
+    request: { sucursalId: number }
+    response: import('./types').SyncOutboxEntry[]
+  }
+  'sync:confirmar': {
+    request: { ids: number[] }
+    response: void
+  }
+  // Reportes consolidados multisucursal
+  'reportes:multisucursal': {
+    request: { desde: string; hasta: string }
+    response: {
+      porSucursal: import('./types').ResumenSucursalReporte[]
+      totales: { totalVentas: number; cantidadVentas: number; ticketPromedio: number }
+    }
+  }
   // Google Drive backup
   'gdrive:getConfig': {
     request: Record<string, never>

@@ -261,6 +261,35 @@ function runMigrations(): void {
       activa INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS transferencias_stock (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sucursal_origen_id INTEGER NOT NULL REFERENCES sucursales(id),
+      sucursal_destino_id INTEGER NOT NULL REFERENCES sucursales(id),
+      usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+      estado TEXT NOT NULL DEFAULT 'pendiente',
+      observacion TEXT,
+      fecha TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      fecha_recepcion TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS items_transferencia (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      transferencia_id INTEGER NOT NULL REFERENCES transferencias_stock(id),
+      producto_id INTEGER NOT NULL REFERENCES productos(id),
+      cantidad REAL NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_outbox (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sucursal_id INTEGER NOT NULL REFERENCES sucursales(id),
+      tabla TEXT NOT NULL,
+      operacion TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      synced_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_sync_outbox_synced ON sync_outbox(synced_at);
   `)
 }
 
@@ -276,6 +305,7 @@ function runIncrementalMigrations(): void {
   alterIfMissing('clientes', 'activo', 'INTEGER NOT NULL DEFAULT 1')
   alterIfMissing('clientes', 'limite_credito', 'REAL NOT NULL DEFAULT 0')
   alterIfMissing('proveedores', 'activo', 'INTEGER NOT NULL DEFAULT 1')
+  alterIfMissing('movimientos_stock', 'sucursal_id', 'INTEGER REFERENCES sucursales(id)')
 }
 
 function seedInitialData(): void {

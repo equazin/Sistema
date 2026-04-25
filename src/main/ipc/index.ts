@@ -18,6 +18,9 @@ import { registerAuditoriaHandlers } from './auditoria'
 import { registerPlanHandlers } from './plan'
 import { registerApiConfigHandlers } from './api_config'
 import { registerGDriveHandlers } from './gdrive'
+import { registerSucursalesHandlers } from './sucursales'
+import { registerTransferenciasHandlers } from './transferencias'
+import { registerSyncHandlers } from './sync'
 
 export function registerAllHandlers(): void {
   registerProductosHandlers()
@@ -40,4 +43,7 @@ export function registerAllHandlers(): void {
   registerPlanHandlers()
   registerApiConfigHandlers()
   registerGDriveHandlers()
+  registerSucursalesHandlers()
+  registerTransferenciasHandlers()
+  registerSyncHandlers()
 }
