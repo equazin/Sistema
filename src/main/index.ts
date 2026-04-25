@@ -2,6 +2,8 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { initDatabase } from './db/database'
 import { registerAllHandlers } from './ipc'
+import { setupAutoUpdater } from './ipc/updater'
+import { iniciarBackupAutomatico } from './ipc/backup'
 
 function createWindow(): BrowserWindow {
   const isDev = !app.isPackaged
@@ -45,6 +47,8 @@ app.whenReady().then(() => {
 
   initDatabase()
   registerAllHandlers()
+  setupAutoUpdater()
+  iniciarBackupAutomatico()
   createWindow()
 
   app.on('activate', () => {

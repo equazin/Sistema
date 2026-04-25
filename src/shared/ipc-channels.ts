@@ -256,6 +256,23 @@ export interface IpcChannelMap {
       detalle: { promocionId: number; nombre: string; descuento: number }[]
     }
   }
+  // Backup
+  'backup:ejecutar': {
+    request: { destino?: string }
+    response: { path: string; fecha: string }
+  }
+  'backup:getConfig': {
+    request: Record<string, never>
+    response: { carpeta: string; frecuencia: 'diario' | 'semanal' | 'manual' } | null
+  }
+  'backup:setConfig': {
+    request: { carpeta: string; frecuencia: 'diario' | 'semanal' | 'manual' }
+    response: void
+  }
+  'backup:listar': {
+    request: Record<string, never>
+    response: { nombre: string; path: string; tamaño: number; fecha: string }[]
+  }
   // Actualización masiva de precios
   'precios:preview': {
     request: import('./types').ActualizacionMasiva

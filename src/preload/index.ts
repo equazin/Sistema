@@ -8,8 +8,20 @@ function invoke<C extends keyof IpcChannels>(
   return ipcRenderer.invoke(channel, request)
 }
 
+function invokeRaw(channel: string, ...args: unknown[]): Promise<unknown> {
+  return ipcRenderer.invoke(channel, ...args)
+}
+
+function on(channel: string, listener: (...args: unknown[]) => void): () => void {
+  const wrapped = (_event: Electron.IpcRendererEvent, ...args: unknown[]) => listener(...args)
+  ipcRenderer.on(channel, wrapped)
+  return () => ipcRenderer.removeListener(channel, wrapped)
+}
+
 const api = {
   invoke,
+  invokeRaw,
+  on,
 }
 
 contextBridge.exposeInMainWorld('api', api)

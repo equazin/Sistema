@@ -129,6 +129,59 @@ export function ReportesPage(): JSX.Element {
     URL.revokeObjectURL(url)
   }, [tab, grupos, ranking, medios, stockData, desde, hasta])
 
+  const exportarXLS = useCallback(() => {
+    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"/></head><body>'
+    let filename = ''
+
+    const td = (v: string | number, bold = false) =>
+      `<td${bold ? ' style="font-weight:bold"' : ''}>${String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</td>`
+
+    if (tab === 'ventas') {
+      filename = `ventas_${desde}_${hasta}.xls`
+      html += '<table><tr><th>Período</th><th>Ventas</th><th>Descuentos</th><th>Total</th></tr>'
+      html += grupos.map(g =>
+        `<tr>${td(g.periodo)}${td(g.cantidad)}${td(g.descuentos.toFixed(2))}${td(g.total.toFixed(2), true)}</tr>`
+      ).join('')
+      if (resumen) {
+        html += `<tr><td></td><td></td><td style="font-weight:bold">TOTAL</td>${td(resumen.totalRecaudado.toFixed(2), true)}</tr>`
+      }
+      html += '</table>'
+    } else if (tab === 'ranking') {
+      filename = `ranking_${desde}_${hasta}.xls`
+      html += '<table><tr><th>#</th><th>Producto</th><th>Código de barras</th><th>Cantidad vendida</th><th>Apariciones</th><th>Total</th></tr>'
+      html += ranking.map(r =>
+        `<tr>${td(r.posicion)}${td(r.nombre)}${td(r.codigoBarras ?? '')}${td(r.cantidadVendida)}${td(r.apariciones)}${td(r.totalVendido.toFixed(2), true)}</tr>`
+      ).join('')
+      html += '</table>'
+    } else if (tab === 'medios_pago') {
+      filename = `medios_pago_${desde}_${hasta}.xls`
+      const totalGeneral = medios.reduce((s, m) => s + m.total, 0)
+      html += '<table><tr><th>Medio de pago</th><th>Transacciones</th><th>Total</th><th>%</th></tr>'
+      html += medios.map(m =>
+        `<tr>${td(LABELS_MEDIO_PAGO[m.medioPago] ?? m.medioPago)}${td(m.cantidad)}${td(m.total.toFixed(2), true)}${td(totalGeneral > 0 ? ((m.total / totalGeneral) * 100).toFixed(1) + '%' : '—')}</tr>`
+      ).join('')
+      html += `<tr><td style="font-weight:bold">TOTAL</td><td></td>${td(totalGeneral.toFixed(2), true)}<td>100%</td></tr>`
+      html += '</table>'
+    } else if (tab === 'stock' && stockData) {
+      filename = `stock_valorizado.xls`
+      html += '<table><tr><th>Producto</th><th>Categoría</th><th>Stock actual</th><th>Stock mínimo</th><th>Precio costo</th><th>Precio venta</th><th>Valor costo</th><th>Valor venta</th></tr>'
+      html += stockData.productos.map(p =>
+        `<tr>${td(p.nombre)}${td(p.categoria ?? '')}${td(p.stockActual)}${td(p.stockMinimo)}${td(p.precioCosto.toFixed(2))}${td(p.precioVenta.toFixed(2))}${td(p.valorCosto.toFixed(2))}${td(p.valorVenta.toFixed(2), true)}</tr>`
+      ).join('')
+      html += `<tr><td colspan="6" style="font-weight:bold">TOTALES</td>${td(stockData.totalValorCosto.toFixed(2), true)}${td(stockData.totalValorVenta.toFixed(2), true)}</tr>`
+      html += '</table>'
+    }
+
+    html += '</body></html>'
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [tab, grupos, ranking, medios, stockData, resumen, desde, hasta])
+
   const TABS: { key: Tab; label: string }[] = [
     { key: 'ventas', label: 'Ventas' },
     { key: 'ranking', label: 'Ranking productos' },
@@ -140,7 +193,10 @@ export function ReportesPage(): JSX.Element {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-800">Reportes</h1>
-        <Button variant="outline" onClick={exportarCSV}>Exportar CSV</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={exportarCSV} size="sm">Exportar CSV</Button>
+          <Button variant="outline" onClick={exportarXLS} size="sm">Exportar Excel</Button>
+        </div>
       </div>
 
       {/* Tabs */}
