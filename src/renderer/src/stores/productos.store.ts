@@ -15,9 +15,9 @@ interface ProductosState {
   fetchCategorias: () => Promise<void>
   setSearch: (search: string) => void
   setPage: (page: number) => void
-  createProducto: (data: Omit<Producto, 'id' | 'updatedAt'>) => Promise<Producto>
-  updateProducto: (id: number, data: Partial<Producto>) => Promise<Producto>
-  deleteProducto: (id: number) => Promise<void>
+  createProducto: (data: Omit<Producto, 'id' | 'updatedAt'>, usuarioId?: number) => Promise<Producto>
+  updateProducto: (id: number, data: Partial<Producto>, usuarioId?: number) => Promise<Producto>
+  deleteProducto: (id: number, usuarioId?: number) => Promise<void>
   findByBarcode: (barcode: string) => Promise<Producto | null>
 }
 
@@ -58,22 +58,22 @@ export const useProductosStore = create<ProductosState>((set, get) => ({
     get().fetchProductos()
   },
 
-  createProducto: async (data) => {
-    const producto = await invoke('productos:create', data)
+  createProducto: async (data, usuarioId) => {
+    const producto = await invoke('productos:create', { ...data, usuarioId })
     await get().fetchProductos()
     return producto
   },
 
-  updateProducto: async (id, data) => {
-    const producto = await invoke('productos:update', { id, ...data })
+  updateProducto: async (id, data, usuarioId) => {
+    const producto = await invoke('productos:update', { id, ...data, usuarioId })
     set((state) => ({
       productos: state.productos.map((p) => (p.id === id ? producto : p)),
     }))
     return producto
   },
 
-  deleteProducto: async (id) => {
-    await invoke('productos:delete', { id })
+  deleteProducto: async (id, usuarioId) => {
+    await invoke('productos:delete', { id, usuarioId })
     set((state) => ({
       productos: state.productos.filter((p) => p.id !== id),
       total: state.total - 1,

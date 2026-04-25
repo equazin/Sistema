@@ -1,6 +1,43 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
-import type { Venta, VentaDetalle } from '../../shared/types'
+import type { PagoVenta, Venta, VentaDetalle } from '../../shared/types'
+import { registrarAuditoria } from './auditoria'
+
+interface ClienteCuentaCorriente {
+  id: number
+  nombre: string
+  saldo_cuenta_corriente: number
+  limite_credito: number
+  activo: number
+}
+
+export function calcularMontoCuentaCorriente(pagos: PagoVenta[]): number {
+  return pagos
+    .filter((p) => p.medioPago === 'cuenta_corriente')
+    .reduce((sum, p) => sum + p.monto, 0)
+}
+
+export function validarCuentaCorrienteVenta(params: {
+  clienteId: number | null
+  cliente: ClienteCuentaCorriente | undefined
+  montoCuentaCorriente: number
+}): void {
+  const { clienteId, cliente, montoCuentaCorriente } = params
+  if (montoCuentaCorriente <= 0) return
+
+  if (!clienteId) {
+    throw new Error('Seleccioná un cliente para cobrar por cuenta corriente')
+  }
+
+  if (!cliente || !cliente.activo) {
+    throw new Error('Cliente no válido para cuenta corriente')
+  }
+
+  const saldoNuevo = cliente.saldo_cuenta_corriente + montoCuentaCorriente
+  if (saldoNuevo > cliente.limite_credito) {
+    throw new Error(`La cuenta corriente supera el límite de crédito de ${cliente.nombre}`)
+  }
+}
 
 export function registerVentasHandlers(): void {
   handle('ventas:crear', (data) => {
@@ -9,6 +46,21 @@ export function registerVentasHandlers(): void {
     const createVenta = db.transaction(() => {
       const subtotal = data.items.reduce((sum, i) => sum + i.subtotal, 0)
       const total = subtotal - data.descuentoTotal
+      const montoCuentaCorriente = calcularMontoCuentaCorriente(data.pagos)
+
+      if (montoCuentaCorriente > 0) {
+        const cliente = db.prepare(`
+          SELECT id, nombre, saldo_cuenta_corriente, limite_credito, activo
+          FROM clientes
+          WHERE id = ?
+        `).get(data.clienteId) as ClienteCuentaCorriente | undefined
+
+        validarCuentaCorrienteVenta({
+          clienteId: data.clienteId,
+          cliente,
+          montoCuentaCorriente,
+        })
+      }
 
       const ventaResult = db.prepare(`
         INSERT INTO ventas (turno_id, sucursal_id, usuario_id, cliente_id, subtotal, descuento_total, total, tipo_comprobante)
@@ -52,6 +104,26 @@ export function registerVentasHandlers(): void {
       for (const pago of data.pagos) {
         pagoStmt.run(ventaId, pago.medioPago, pago.monto, pago.referencia ?? null)
       }
+
+      if (montoCuentaCorriente > 0 && data.clienteId) {
+        db.prepare(`
+          UPDATE clientes
+          SET saldo_cuenta_corriente = saldo_cuenta_corriente + ?
+          WHERE id = ?
+        `).run(montoCuentaCorriente, data.clienteId)
+      }
+
+      registrarAuditoria(db, {
+        usuarioId: data.usuarioId,
+        accion: 'venta_creada',
+        tabla: 'ventas',
+        referenciaId: ventaId,
+        detalle: {
+          total,
+          clienteId: data.clienteId,
+          mediosPago: data.pagos.map((p) => p.medioPago),
+        },
+      })
 
       return ventaId
     })

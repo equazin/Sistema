@@ -27,7 +27,7 @@ interface VentaState {
   agregarPago: (medioPago: MedioPago, monto: number) => void
   quitarPago: (medioPago: MedioPago) => void
   calcularPromociones: (medioPago: string) => Promise<void>
-  completarVenta: (turnoId: number, sucursalId: number, usuarioId: number) => Promise<void>
+  completarVenta: (turnoId: number, sucursalId: number, usuarioId: number, clienteId?: number | null) => Promise<void>
   resetVenta: () => void
 
   // Computed
@@ -140,7 +140,7 @@ export const useVentaStore = create<VentaState>((set, get) => ({
     }
   },
 
-  completarVenta: async (turnoId, sucursalId, usuarioId) => {
+  completarVenta: async (turnoId, sucursalId, usuarioId, clienteId = null) => {
     const { items, pagos, descuentoTotal } = get()
     if (items.length === 0) throw new Error('No hay productos en la venta')
 
@@ -150,7 +150,7 @@ export const useVentaStore = create<VentaState>((set, get) => ({
         turnoId,
         sucursalId,
         usuarioId,
-        clienteId: null,
+        clienteId,
         items: items.map(({ producto: _p, ...item }) => item),
         pagos,
         descuentoTotal,

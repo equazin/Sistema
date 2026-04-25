@@ -1,10 +1,14 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useCajaStore } from '../stores/caja.store'
 import { useAuthStore } from '../stores/auth.store'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { Modal } from '../components/ui/Modal'
 import { formatPrecio, formatFecha } from '../lib/format'
 import { invoke } from '../lib/api'
+import { TicketPreviewModal } from '../components/TicketPreviewModal'
+import type { TicketAncho } from '../../../shared/types'
+import { tienePermiso } from '../../../shared/permissions'
 
 const CAJA_ID = 1
 
@@ -15,6 +19,13 @@ export function CajaPage(): JSX.Element {
   const [montoCierre, setMontoCierre] = useState('0')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [turnoRecienCerrado, setTurnoRecienCerrado] = useState<import('../../../shared/types').TurnoCaja | null>(null)
+  const [ticketPreview, setTicketPreview] = useState<{ html: string; anchoTicket: TicketAncho } | null>(null)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [cambiarCajeroOpen, setCambiarCajeroOpen] = useState(false)
+  const [pinCajero, setPinCajero] = useState('')
+  const [errorCajero, setErrorCajero] = useState<string | null>(null)
+  const pinInputRef = useRef<HTMLInputElement>(null)
+  const puedeCerrarCaja = tienePermiso(usuario, 'caja:cerrar')
 
   useEffect(() => {
     fetchTurno(CAJA_ID)
@@ -37,18 +48,55 @@ export function CajaPage(): JSX.Element {
   }, [usuario, montoApertura, abrirTurno])
 
   const handleCerrar = useCallback(async () => {
-    if (!turnoActual) return
+    if (!turnoActual || !usuario) return
+    if (!puedeCerrarCaja) return alert('No tenés permiso para cerrar caja')
     if (!confirm('¿Cerrar el turno de caja?')) return
     setIsSubmitting(true)
     try {
-      const cerrado = await cerrarTurno(turnoActual.id, Number(montoCierre) || 0)
+      const cerrado = await cerrarTurno(turnoActual.id, Number(montoCierre) || 0, usuario.id)
       setTurnoRecienCerrado(cerrado)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al cerrar caja')
     } finally {
       setIsSubmitting(false)
     }
-  }, [turnoActual, montoCierre, cerrarTurno])
+  }, [turnoActual, usuario, puedeCerrarCaja, montoCierre, cerrarTurno])
+
+  const handlePreviewCierre = useCallback(async () => {
+    if (!turnoRecienCerrado) return
+    try {
+      const preview = await invoke('impresion:previewCierre', { turnoId: turnoRecienCerrado.id })
+      setTicketPreview(preview)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al generar vista previa')
+    }
+  }, [turnoRecienCerrado])
+
+  const handleCambiarCajero = useCallback(async () => {
+    if (!pinCajero.trim()) return
+    setErrorCajero(null)
+    try {
+      const nuevoUsuario = await invoke('usuarios:login', { pin: pinCajero })
+      useAuthStore.getState().setUsuario(nuevoUsuario)
+      setCambiarCajeroOpen(false)
+      setPinCajero('')
+    } catch {
+      setErrorCajero('PIN incorrecto o usuario inactivo')
+    }
+  }, [pinCajero])
+
+  const handleImprimirCierre = useCallback(async () => {
+    if (!turnoRecienCerrado) return
+    setIsPrinting(true)
+    try {
+      await invoke('impresion:ticketCierre', { turnoId: turnoRecienCerrado.id })
+      setTicketPreview(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al imprimir cierre')
+    } finally {
+      setIsPrinting(false)
+    }
+  }, [turnoRecienCerrado])
 
   const totalVentas = ventasDelTurno.reduce((sum, v) => sum + v.total, 0)
   const cantidadVentas = ventasDelTurno.length
@@ -74,15 +122,26 @@ export function CajaPage(): JSX.Element {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => invoke('impresion:ticketCierre', { turnoId: turnoRecienCerrado.id })}
+              onClick={handlePreviewCierre}
             >
-              🖨️ Imprimir cierre
+              Vista previa / imprimir
             </Button>
             <Button className="flex-1" onClick={() => setTurnoRecienCerrado(null)}>
               Cerrar
             </Button>
           </div>
         </div>
+        {ticketPreview && (
+          <TicketPreviewModal
+            open={Boolean(ticketPreview)}
+            title="Ticket cierre de caja"
+            html={ticketPreview.html}
+            anchoTicket={ticketPreview.anchoTicket}
+            isPrinting={isPrinting}
+            onClose={() => setTicketPreview(null)}
+            onPrint={handleImprimirCierre}
+          />
+        )}
       </div>
     )
   }
@@ -120,9 +179,14 @@ export function CajaPage(): JSX.Element {
           <h1 className="text-2xl font-bold text-slate-800">Caja abierta</h1>
           <p className="text-sm text-slate-500">Turno desde {formatFecha(turnoActual.aperturaAt)}</p>
         </div>
-        <Button variant="destructive" onClick={handleCerrar} disabled={isSubmitting}>
-          Cerrar caja
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setPinCajero(''); setErrorCajero(null); setCambiarCajeroOpen(true) }}>
+            Cambiar cajero
+          </Button>
+          <Button variant="destructive" onClick={handleCerrar} disabled={isSubmitting || !puedeCerrarCaja}>
+            Cerrar caja
+          </Button>
+        </div>
       </div>
 
       {/* Resumen del turno */}
@@ -179,6 +243,27 @@ export function CajaPage(): JSX.Element {
           </div>
         </div>
       )}
+
+      <Modal isOpen={cambiarCajeroOpen} onClose={() => setCambiarCajeroOpen(false)} title="Cambiar cajero" size="sm">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-slate-500">Ingresá el PIN del nuevo cajero para continuar con la caja abierta.</p>
+          <Input
+            ref={pinInputRef}
+            label="PIN del nuevo cajero"
+            value={pinCajero}
+            onChange={e => { setPinCajero(e.target.value); setErrorCajero(null) }}
+            onKeyDown={e => { if (e.key === 'Enter') handleCambiarCajero() }}
+            type="password"
+            inputMode="numeric"
+            autoFocus
+          />
+          {errorCajero && <p className="text-sm text-red-500">{errorCajero}</p>}
+          <div className="flex gap-3 justify-end">
+            <Button variant="outline" onClick={() => setCambiarCajeroOpen(false)}>Cancelar</Button>
+            <Button onClick={handleCambiarCajero} disabled={!pinCajero.trim()}>Confirmar</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

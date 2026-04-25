@@ -6,13 +6,15 @@
   "author": "",
   "license": "ISC",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "npm run sqlite:electron && electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "package": "npm run build && electron-builder",
-    "postinstall": "cd node_modules/better-sqlite3 && npx prebuild-install --runtime electron --target 34.5.8 --arch x64 --platform win32 || electron-rebuild -f -w better-sqlite3",
+    "preview": "npm run sqlite:electron && electron-vite preview",
+    "package": "npm run build && npm run sqlite:electron && electron-builder",
+    "postinstall": "npm run sqlite:electron",
+    "sqlite:node": "node scripts/prepare-better-sqlite3.cjs node",
+    "sqlite:electron": "node scripts/prepare-better-sqlite3.cjs electron",
     "typecheck": "tsc --noEmit",
-    "test": "vitest"
+    "test": "npm run sqlite:node && vitest"
   },
   "dependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
@@ -25,6 +27,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0",
     "tailwind-merge": "^2.5.5",
+    "xlsx": "^0.18.5",
     "zustand": "^5.0.1"
   },
   "devDependencies": {

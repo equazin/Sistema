@@ -9,9 +9,10 @@ import type {
   RankingProducto,
   MedioPagoReporte,
   ProductoStockValorizado,
+  FilaCuentaCorrienteReporte,
 } from '../../../shared/types'
 
-type Tab = 'ventas' | 'ranking' | 'medios_pago' | 'stock'
+type Tab = 'ventas' | 'ranking' | 'medios_pago' | 'stock' | 'cuenta_corriente'
 type AgruparPor = 'dia' | 'semana' | 'mes'
 
 const hoy = new Date().toISOString().slice(0, 10)
@@ -46,6 +47,9 @@ export function ReportesPage(): JSX.Element {
 
   // Stock valorizado
   const [stockData, setStockData] = useState<{ productos: ProductoStockValorizado[]; totalValorCosto: number; totalValorVenta: number } | null>(null)
+
+  // Cuenta corriente
+  const [ccData, setCcData] = useState<{ filas: FilaCuentaCorrienteReporte[]; resumen: { totalDeuda: number; totalCobrado: number; saldoFinal: number; clientesConDeuda: number } } | null>(null)
 
   const cargarVentas = useCallback(async () => {
     setIsLoading(true)
@@ -89,11 +93,22 @@ export function ReportesPage(): JSX.Element {
     }
   }, [])
 
+  const cargarCC = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const res = await invoke('reportes:cuentaCorriente', { desde, hasta })
+      setCcData(res)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [desde, hasta])
+
   useEffect(() => {
     if (tab === 'ventas') cargarVentas()
     else if (tab === 'ranking') cargarRanking()
     else if (tab === 'medios_pago') cargarMedios()
     else if (tab === 'stock') cargarStock()
+    else if (tab === 'cuenta_corriente') cargarCC()
   }, [tab])
 
   const exportarCSV = useCallback(() => {
@@ -118,6 +133,12 @@ export function ReportesPage(): JSX.Element {
         `"${p.nombre}","${p.categoria ?? ''}",${p.stockActual},${p.stockMinimo},${p.precioCosto.toFixed(2)},${p.precioVenta.toFixed(2)},${p.valorCosto.toFixed(2)},${p.valorVenta.toFixed(2)}`
       ).join('\n')
       filename = `stock_valorizado.csv`
+    } else if (tab === 'cuenta_corriente' && ccData) {
+      csv = 'Cliente,Saldo actual,Límite crédito,Vendido periodo,Cobrado periodo,Ventas\n'
+      csv += ccData.filas.map(f =>
+        `"${f.nombreCliente}",${f.saldoActual.toFixed(2)},${f.limiteCredito.toFixed(2)},${f.totalVendidoPeriodo.toFixed(2)},${f.totalCobradoPeriodo.toFixed(2)},${f.cantidadVentas}`
+      ).join('\n')
+      filename = `cuenta_corriente_${desde}_${hasta}.csv`
     }
 
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -129,57 +150,89 @@ export function ReportesPage(): JSX.Element {
     URL.revokeObjectURL(url)
   }, [tab, grupos, ranking, medios, stockData, desde, hasta])
 
-  const exportarXLS = useCallback(() => {
-    let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"/></head><body>'
+  const exportarXLS = useCallback(async () => {
+    const XLSX = await import('xlsx')
+    const workbook = XLSX.utils.book_new()
+    let rows: (string | number)[][] = []
     let filename = ''
-
-    const td = (v: string | number, bold = false) =>
-      `<td${bold ? ' style="font-weight:bold"' : ''}>${String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;')}</td>`
+    let sheetName = ''
 
     if (tab === 'ventas') {
-      filename = `ventas_${desde}_${hasta}.xls`
-      html += '<table><tr><th>Período</th><th>Ventas</th><th>Descuentos</th><th>Total</th></tr>'
-      html += grupos.map(g =>
-        `<tr>${td(g.periodo)}${td(g.cantidad)}${td(g.descuentos.toFixed(2))}${td(g.total.toFixed(2), true)}</tr>`
-      ).join('')
+      filename = `ventas_${desde}_${hasta}.xlsx`
+      sheetName = 'Ventas'
+      rows = [
+        ['Periodo', 'Ventas', 'Descuentos', 'Total'],
+        ...grupos.map(g => [g.periodo, g.cantidad, g.descuentos, g.total]),
+      ]
       if (resumen) {
-        html += `<tr><td></td><td></td><td style="font-weight:bold">TOTAL</td>${td(resumen.totalRecaudado.toFixed(2), true)}</tr>`
+        rows.push([])
+        rows.push(['Resumen', '', '', ''])
+        rows.push(['Total ventas', resumen.totalVentas, '', ''])
+        rows.push(['Total recaudado', resumen.totalRecaudado, '', ''])
+        rows.push(['Ticket promedio', resumen.ticketPromedio, '', ''])
+        rows.push(['Total descuentos', resumen.totalDescuentos, '', ''])
       }
-      html += '</table>'
     } else if (tab === 'ranking') {
-      filename = `ranking_${desde}_${hasta}.xls`
-      html += '<table><tr><th>#</th><th>Producto</th><th>Código de barras</th><th>Cantidad vendida</th><th>Apariciones</th><th>Total</th></tr>'
-      html += ranking.map(r =>
-        `<tr>${td(r.posicion)}${td(r.nombre)}${td(r.codigoBarras ?? '')}${td(r.cantidadVendida)}${td(r.apariciones)}${td(r.totalVendido.toFixed(2), true)}</tr>`
-      ).join('')
-      html += '</table>'
+      filename = `ranking_${desde}_${hasta}.xlsx`
+      sheetName = 'Ranking'
+      rows = [
+        ['Posicion', 'Producto', 'Codigo de barras', 'Cantidad vendida', 'Apariciones', 'Total'],
+        ...ranking.map(r => [r.posicion, r.nombre, r.codigoBarras ?? '', r.cantidadVendida, r.apariciones, r.totalVendido]),
+      ]
     } else if (tab === 'medios_pago') {
-      filename = `medios_pago_${desde}_${hasta}.xls`
+      filename = `medios_pago_${desde}_${hasta}.xlsx`
+      sheetName = 'Medios de pago'
       const totalGeneral = medios.reduce((s, m) => s + m.total, 0)
-      html += '<table><tr><th>Medio de pago</th><th>Transacciones</th><th>Total</th><th>%</th></tr>'
-      html += medios.map(m =>
-        `<tr>${td(LABELS_MEDIO_PAGO[m.medioPago] ?? m.medioPago)}${td(m.cantidad)}${td(m.total.toFixed(2), true)}${td(totalGeneral > 0 ? ((m.total / totalGeneral) * 100).toFixed(1) + '%' : '—')}</tr>`
-      ).join('')
-      html += `<tr><td style="font-weight:bold">TOTAL</td><td></td>${td(totalGeneral.toFixed(2), true)}<td>100%</td></tr>`
-      html += '</table>'
+      rows = [
+        ['Medio de pago', 'Transacciones', 'Total', 'Porcentaje'],
+        ...medios.map(m => [
+          LABELS_MEDIO_PAGO[m.medioPago] ?? m.medioPago,
+          m.cantidad,
+          m.total,
+          totalGeneral > 0 ? m.total / totalGeneral : 0,
+        ]),
+        ['TOTAL', '', totalGeneral, totalGeneral > 0 ? 1 : 0],
+      ]
     } else if (tab === 'stock' && stockData) {
-      filename = `stock_valorizado.xls`
-      html += '<table><tr><th>Producto</th><th>Categoría</th><th>Stock actual</th><th>Stock mínimo</th><th>Precio costo</th><th>Precio venta</th><th>Valor costo</th><th>Valor venta</th></tr>'
-      html += stockData.productos.map(p =>
-        `<tr>${td(p.nombre)}${td(p.categoria ?? '')}${td(p.stockActual)}${td(p.stockMinimo)}${td(p.precioCosto.toFixed(2))}${td(p.precioVenta.toFixed(2))}${td(p.valorCosto.toFixed(2))}${td(p.valorVenta.toFixed(2), true)}</tr>`
-      ).join('')
-      html += `<tr><td colspan="6" style="font-weight:bold">TOTALES</td>${td(stockData.totalValorCosto.toFixed(2), true)}${td(stockData.totalValorVenta.toFixed(2), true)}</tr>`
-      html += '</table>'
+      filename = 'stock_valorizado.xlsx'
+      sheetName = 'Stock valorizado'
+      rows = [
+        ['Producto', 'Categoria', 'Stock actual', 'Stock minimo', 'Precio costo', 'Precio venta', 'Valor costo', 'Valor venta', 'Bajo minimo'],
+        ...stockData.productos.map(p => [
+          p.nombre,
+          p.categoria ?? '',
+          p.stockActual,
+          p.stockMinimo,
+          p.precioCosto,
+          p.precioVenta,
+          p.valorCosto,
+          p.valorVenta,
+          p.bajoMinimo ? 'Si' : 'No',
+        ]),
+        ['TOTALES', '', '', '', '', '', stockData.totalValorCosto, stockData.totalValorVenta, ''],
+      ]
+    } else if (tab === 'cuenta_corriente' && ccData) {
+      filename = `cuenta_corriente_${desde}_${hasta}.xlsx`
+      sheetName = 'Cuenta corriente'
+      rows = [
+        ['Cliente', 'Saldo actual', 'Limite credito', 'Vendido periodo', 'Cobrado periodo', 'Ventas'],
+        ...ccData.filas.map(f => [f.nombreCliente, f.saldoActual, f.limiteCredito, f.totalVendidoPeriodo, f.totalCobradoPeriodo, f.cantidadVentas]),
+        [],
+        ['RESUMEN', '', '', '', '', ''],
+        ['Clientes con deuda', ccData.resumen.clientesConDeuda, '', '', '', ''],
+        ['Total deuda', ccData.resumen.totalDeuda, '', '', '', ''],
+        ['Total cobrado periodo', ccData.resumen.totalCobrado, '', '', '', ''],
+      ]
     }
 
-    html += '</body></html>'
-    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    a.click()
-    URL.revokeObjectURL(url)
+    if (!filename || rows.length === 0) return
+
+    const sheet = XLSX.utils.aoa_to_sheet(rows)
+    sheet['!cols'] = rows[0].map((_, col) => ({
+      wch: Math.min(42, Math.max(12, ...rows.map(row => String(row[col] ?? '').length + 2))),
+    }))
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
+    XLSX.writeFile(workbook, filename)
   }, [tab, grupos, ranking, medios, stockData, resumen, desde, hasta])
 
   const TABS: { key: Tab; label: string }[] = [
@@ -187,6 +240,7 @@ export function ReportesPage(): JSX.Element {
     { key: 'ranking', label: 'Ranking productos' },
     { key: 'medios_pago', label: 'Medios de pago' },
     { key: 'stock', label: 'Stock valorizado' },
+    { key: 'cuenta_corriente', label: 'Cuenta corriente' },
   ]
 
   return (
@@ -254,6 +308,7 @@ export function ReportesPage(): JSX.Element {
               if (tab === 'ventas') cargarVentas()
               else if (tab === 'ranking') cargarRanking()
               else if (tab === 'medios_pago') cargarMedios()
+              else if (tab === 'cuenta_corriente') cargarCC()
             }}
             disabled={isLoading}
             size="sm"
@@ -273,6 +328,8 @@ export function ReportesPage(): JSX.Element {
             <StatCard label="Ticket promedio" value={formatPrecio(resumen.ticketPromedio)} />
             <StatCard label="Total descuentos" value={formatPrecio(resumen.totalDescuentos)} />
           </div>
+
+          {grupos.length > 0 && <VentasTrendChart grupos={grupos} />}
 
           {/* Grupos */}
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -373,6 +430,8 @@ export function ReportesPage(): JSX.Element {
 
       {tab === 'medios_pago' && (
         <div className="flex flex-col gap-4">
+          {medios.length > 0 && <MediosPagoChart medios={medios} />}
+
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
@@ -400,6 +459,57 @@ export function ReportesPage(): JSX.Element {
                     </tr>
                   ))
                 })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'cuenta_corriente' && ccData && (
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-4 gap-4">
+            <StatCard label="Clientes con deuda" value={String(ccData.resumen.clientesConDeuda)} />
+            <StatCard label="Deuda total" value={formatPrecio(ccData.resumen.totalDeuda)} />
+            <StatCard label="Cobrado en período" value={formatPrecio(ccData.resumen.totalCobrado)} />
+            <StatCard label="Ventas CC en período" value={formatPrecio(ccData.filas.reduce((s, f) => s + f.totalVendidoPeriodo, 0))} />
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-slate-600 font-semibold">Cliente</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Saldo actual</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Límite</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Uso %</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Vendido período</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Cobrado período</th>
+                  <th className="text-right px-4 py-3 text-slate-600 font-semibold">Ventas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ccData.filas.length === 0 && (
+                  <tr><td colSpan={7} className="text-center py-8 text-slate-400">Sin movimientos en cuenta corriente en el período</td></tr>
+                )}
+                {ccData.filas.map(f => {
+                  const uso = f.limiteCredito > 0 ? (f.saldoActual / f.limiteCredito) * 100 : 0
+                  const sobreLimite = uso >= 90
+                  return (
+                    <tr key={f.clienteId} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 ${sobreLimite ? 'bg-red-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-slate-800">{f.nombreCliente}</p>
+                        {sobreLimite && <p className="text-xs text-red-500 font-semibold">⚠ Cerca del límite</p>}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-bold ${f.saldoActual > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatPrecio(f.saldoActual)}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">{formatPrecio(f.limiteCredito)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`text-xs font-semibold ${sobreLimite ? 'text-red-600' : 'text-slate-500'}`}>{uso.toFixed(0)}%</span>
+                      </td>
+                      <td className="px-4 py-3 text-right text-slate-700">{formatPrecio(f.totalVendidoPeriodo)}</td>
+                      <td className="px-4 py-3 text-right text-green-700">{formatPrecio(f.totalCobradoPeriodo)}</td>
+                      <td className="px-4 py-3 text-right text-slate-500">{f.cantidadVentas}</td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -454,6 +564,71 @@ function StatCard({ label, value }: { label: string; value: string }): JSX.Eleme
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <p className="text-sm text-slate-500">{label}</p>
       <p className="text-2xl font-bold text-slate-800 mt-1">{value}</p>
+    </div>
+  )
+}
+
+function VentasTrendChart({ grupos }: { grupos: GrupoVentasReporte[] }): JSX.Element {
+  const width = 720
+  const height = 220
+  const padding = 28
+  const maxTotal = Math.max(...grupos.map((g) => g.total), 1)
+  const stepX = grupos.length > 1 ? (width - padding * 2) / (grupos.length - 1) : 0
+  const points = grupos.map((g, idx) => {
+    const x = grupos.length === 1 ? width / 2 : padding + idx * stepX
+    const y = height - padding - (g.total / maxTotal) * (height - padding * 2)
+    return { x, y, grupo: g }
+  })
+  const path = points.map((p) => `${p.x},${p.y}`).join(' ')
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-slate-700">Ventas por periodo</h2>
+        <span className="text-xs text-slate-400">Max {formatPrecio(maxTotal)}</span>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-56">
+        <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#e2e8f0" />
+        <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#e2e8f0" />
+        <polyline fill="none" stroke="#2563eb" strokeWidth="3" points={path} />
+        {points.map((p) => (
+          <g key={p.grupo.periodo}>
+            <circle cx={p.x} cy={p.y} r="4" fill="#2563eb" />
+            <text x={p.x} y={height - 8} textAnchor="middle" className="fill-slate-500 text-[10px]">
+              {p.grupo.periodo}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
+function MediosPagoChart({ medios }: { medios: MedioPagoReporte[] }): JSX.Element {
+  const total = medios.reduce((sum, medio) => sum + medio.total, 0)
+  const max = Math.max(...medios.map((medio) => medio.total), 1)
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-semibold text-slate-700">Cobros por medio de pago</h2>
+        <span className="text-xs text-slate-400">Total {formatPrecio(total)}</span>
+      </div>
+      <div className="space-y-3">
+        {medios.map((medio) => {
+          const porcentaje = total > 0 ? (medio.total / total) * 100 : 0
+          const ancho = `${Math.max(4, (medio.total / max) * 100)}%`
+          return (
+            <div key={medio.medioPago} className="grid grid-cols-[160px_1fr_110px] items-center gap-3 text-sm">
+              <span className="font-medium text-slate-700 truncate">{LABELS_MEDIO_PAGO[medio.medioPago] ?? medio.medioPago}</span>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-500 rounded-full" style={{ width: ancho }} />
+              </div>
+              <span className="text-right text-slate-600">{porcentaje.toFixed(1)}%</span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

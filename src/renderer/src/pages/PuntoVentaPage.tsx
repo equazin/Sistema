@@ -7,7 +7,8 @@ import { Button } from '../components/ui/Button'
 import { formatPrecio } from '../lib/format'
 import { invoke } from '../lib/api'
 import { QRMercadoPagoModal } from '../components/QRMercadoPagoModal'
-import type { Producto, MedioPago } from '../../../shared/types'
+import { TicketPreviewModal } from '../components/TicketPreviewModal'
+import type { Producto, MedioPago, Cliente, TicketAncho } from '../../../shared/types'
 
 const MEDIOS_PAGO: { key: MedioPago; label: string; icon: string }[] = [
   { key: 'efectivo', label: 'Efectivo', icon: '💵' },
@@ -15,6 +16,7 @@ const MEDIOS_PAGO: { key: MedioPago; label: string; icon: string }[] = [
   { key: 'credito', label: 'Crédito', icon: '💳' },
   { key: 'transferencia', label: 'Transferencia', icon: '🏦' },
   { key: 'qr_mp', label: 'QR MP', icon: '📱' },
+  { key: 'cuenta_corriente', label: 'Cuenta corriente', icon: 'CC' },
 ]
 
 export function PuntoVentaPage(): JSX.Element {
@@ -35,23 +37,21 @@ export function PuntoVentaPage(): JSX.Element {
   const [efectivoIngresado, setEfectivoIngresado] = useState('')
   const [_medioPagoActivo, setMedioPagoActivo] = useState<MedioPago>('efectivo')
   const [mostrarQRMP, setMostrarQRMP] = useState(false)
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [clienteId, setClienteId] = useState<number | null>(null)
+  const [ticketPreview, setTicketPreview] = useState<{ html: string; anchoTicket: TicketAncho } | null>(null)
+  const [isPrinting, setIsPrinting] = useState(false)
   const busquedaRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchProductos()
+    invoke('clientes:list', {}).then(setClientes).catch(() => setClientes([]))
     busquedaRef.current?.focus()
   }, [])
 
   useEffect(() => {
     if (!ventaCompletada) return
-    const t = setTimeout(() => {
-      resetVenta()
-      setMostrarPago(false)
-      setBusqueda('')
-      setEfectivoIngresado('')
-      busquedaRef.current?.focus()
-    }, 1500)
-    return () => clearTimeout(t)
+    setTicketPreview(null)
   }, [ventaCompletada, resetVenta])
 
   const buscarProducto = useCallback(async (query: string) => {
@@ -103,21 +103,86 @@ export function PuntoVentaPage(): JSX.Element {
     if (!turnoActual) { alert('No hay un turno de caja abierto'); return }
     const totalVenta = total()
     setEfectivoIngresado(String(Math.ceil(totalVenta)))
-    agregarPago('efectivo', totalVenta)
     setMostrarPago(true)
-  }, [items, turnoActual, total, agregarPago])
+  }, [items, turnoActual, total])
 
   const handleConfirmarPago = useCallback(async () => {
     if (!turnoActual || !usuario) return
     try {
-      await completarVenta(turnoActual.cajaId, 1, usuario.id)
+      const usaCuentaCorriente = pagos.some((p) => p.medioPago === 'cuenta_corriente')
+      if (usaCuentaCorriente && !clienteId) {
+        alert('Seleccioná un cliente para cobrar por cuenta corriente')
+        return
+      }
+      await completarVenta(turnoActual.cajaId, 1, usuario.id, clienteId)
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al procesar el pago')
     }
-  }, [turnoActual, usuario, completarVenta])
+  }, [turnoActual, usuario, pagos, clienteId, completarVenta])
+
+  const clienteSeleccionado = clientes.find((c) => c.id === clienteId) ?? null
+  const creditoDisponible = clienteSeleccionado
+    ? clienteSeleccionado.limiteCredito - clienteSeleccionado.saldoCuentaCorriente
+    : 0
+
+  const handleSeleccionMedioPago = useCallback((mp: MedioPago) => {
+    setMedioPagoActivo(mp)
+    void calcularPromociones(mp)
+
+    if (mp === 'qr_mp') {
+      setMostrarQRMP(true)
+      return
+    }
+
+    if (mp === 'cuenta_corriente') {
+      if (!clienteSeleccionado) {
+        alert('Seleccioná un cliente antes de usar cuenta corriente')
+        return
+      }
+      if (total() > creditoDisponible) {
+        alert(`Crédito insuficiente. Disponible: ${formatPrecio(Math.max(0, creditoDisponible))}`)
+        return
+      }
+    }
+
+    agregarPago(mp, total())
+  }, [calcularPromociones, clienteSeleccionado, creditoDisponible, total, agregarPago])
 
   const efectivoNum = Number(efectivoIngresado) || 0
   const vueltoEfectivo = Math.max(0, efectivoNum - total())
+
+  const handleNuevaVenta = useCallback(() => {
+    resetVenta()
+    setMostrarPago(false)
+    setBusqueda('')
+    setEfectivoIngresado('')
+    setClienteId(null)
+    setTicketPreview(null)
+    busquedaRef.current?.focus()
+  }, [resetVenta])
+
+  const handlePreviewVenta = useCallback(async () => {
+    if (!ventaCompletada) return
+    try {
+      const preview = await invoke('impresion:previewVenta', { ventaId: ventaCompletada })
+      setTicketPreview(preview)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al generar vista previa')
+    }
+  }, [ventaCompletada])
+
+  const handleImprimirVenta = useCallback(async () => {
+    if (!ventaCompletada) return
+    setIsPrinting(true)
+    try {
+      await invoke('impresion:ticketVenta', { ventaId: ventaCompletada })
+      setTicketPreview(null)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al imprimir ticket')
+    } finally {
+      setIsPrinting(false)
+    }
+  }, [ventaCompletada])
 
   if (!turnoActual) {
     return (
@@ -268,6 +333,18 @@ export function PuntoVentaPage(): JSX.Element {
         />
       )}
 
+      {ticketPreview && (
+        <TicketPreviewModal
+          open={Boolean(ticketPreview)}
+          title={`Ticket venta #${ventaCompletada ?? ''}`}
+          html={ticketPreview.html}
+          anchoTicket={ticketPreview.anchoTicket}
+          isPrinting={isPrinting}
+          onClose={() => setTicketPreview(null)}
+          onPrint={handleImprimirVenta}
+        />
+      )}
+
       {/* Right: cobro panel */}
       <div className="w-72 flex flex-col gap-3">
         {!mostrarPago ? (
@@ -297,20 +374,42 @@ export function PuntoVentaPage(): JSX.Element {
               <p className="text-4xl font-bold mt-1">{formatPrecio(total())}</p>
             </div>
 
+            <div className="bg-white rounded-xl border border-slate-200 p-3">
+              <label className="text-xs text-slate-500 mb-1 block">Cliente</label>
+              <select
+                value={clienteId ?? ''}
+                onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full border border-slate-200 rounded-lg px-2 py-2 text-sm outline-none focus:border-blue-400"
+              >
+                <option value="">Consumidor final / sin cliente</option>
+                {clientes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+              {clienteSeleccionado && (
+                <div className="mt-2 text-xs text-slate-500 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Saldo actual</span>
+                    <span>{formatPrecio(clienteSeleccionado.saldoCuentaCorriente)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Disponible</span>
+                    <span className={creditoDisponible >= total() ? 'text-green-600 font-semibold' : 'text-red-500 font-semibold'}>
+                      {formatPrecio(Math.max(0, creditoDisponible))}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Medio de pago selector */}
             <div className="grid grid-cols-2 gap-2">
               {MEDIOS_PAGO.map((mp) => (
                 <button
                   key={mp.key}
-                  onClick={() => {
-                    setMedioPagoActivo(mp.key)
-                    void calcularPromociones(mp.key)
-                    if (mp.key === 'qr_mp') {
-                      setMostrarQRMP(true)
-                    } else {
-                      agregarPago(mp.key, total())
-                    }
-                  }}
+                  onClick={() => handleSeleccionMedioPago(mp.key)}
                   className={`flex flex-col items-center py-3 rounded-xl border-2 text-sm font-semibold transition-colors ${
                     pagos.some((p) => p.medioPago === mp.key)
                       ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -330,7 +429,10 @@ export function PuntoVentaPage(): JSX.Element {
                 <input
                   type="number"
                   value={efectivoIngresado}
-                  onChange={(e) => setEfectivoIngresado(e.target.value)}
+                  onChange={(e) => {
+                    setEfectivoIngresado(e.target.value)
+                    agregarPago('efectivo', Number(e.target.value) || 0)
+                  }}
                   className="w-full text-2xl font-bold text-center border-b-2 border-blue-400 outline-none py-1"
                   inputMode="numeric"
                   autoFocus
@@ -353,10 +455,16 @@ export function PuntoVentaPage(): JSX.Element {
                 </div>
                 <Button
                   variant="outline"
-                  onClick={() => invoke('impresion:ticketVenta', { ventaId: ventaCompletada })}
+                  onClick={handlePreviewVenta}
                   className="w-full"
                 >
-                  🖨️ Imprimir ticket
+                  Vista previa / imprimir
+                </Button>
+                <Button
+                  onClick={handleNuevaVenta}
+                  className="w-full"
+                >
+                  Nueva venta
                 </Button>
               </div>
             ) : (

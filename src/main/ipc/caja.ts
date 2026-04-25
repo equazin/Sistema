@@ -1,6 +1,8 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { TurnoCaja } from '../../shared/types'
+import { assertPermisoUsuario } from './permisos'
+import { registrarAuditoria } from './auditoria'
 
 export function registerCajaHandlers(): void {
   handle('turno:actual', ({ cajaId }) => {
@@ -13,6 +15,8 @@ export function registerCajaHandlers(): void {
 
   handle('turno:abrir', ({ cajaId, usuarioId, montoApertura }) => {
     const db = getSqlite()
+    assertPermisoUsuario(db, usuarioId, 'caja:abrir')
+
     const turnoAbierto = db.prepare(
       "SELECT id FROM turnos_caja WHERE caja_id = ? AND estado = 'abierto'"
     ).get(cajaId)
@@ -22,12 +26,20 @@ export function registerCajaHandlers(): void {
       INSERT INTO turnos_caja (caja_id, usuario_id, monto_apertura)
       VALUES (?, ?, ?)
     `).run(cajaId, usuarioId, montoApertura)
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'turno_abierto',
+      tabla: 'turnos_caja',
+      referenciaId: result.lastInsertRowid as number,
+      detalle: { cajaId, montoApertura },
+    })
     const row = db.prepare('SELECT * FROM turnos_caja WHERE id = ?').get(result.lastInsertRowid)
     return mapTurno(row as Record<string, unknown>)
   })
 
-  handle('turno:cerrar', ({ turnoId, montoCierreDeclado }) => {
+  handle('turno:cerrar', ({ turnoId, montoCierreDeclado, usuarioId }) => {
     const db = getSqlite()
+    assertPermisoUsuario(db, usuarioId, 'caja:cerrar')
     const turno = db.prepare('SELECT * FROM turnos_caja WHERE id = ?').get(turnoId) as Record<string, unknown> | undefined
     if (!turno) throw new Error('Turno no encontrado')
     if (turno.estado === 'cerrado') throw new Error('El turno ya está cerrado')
@@ -51,6 +63,14 @@ export function registerCajaHandlers(): void {
           diferencia = ?
       WHERE id = ?
     `).run(montoCierreDeclado, totalSistema, diferencia, turnoId)
+
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'turno_cerrado',
+      tabla: 'turnos_caja',
+      referenciaId: turnoId,
+      detalle: { montoCierreDeclado, totalSistema, diferencia },
+    })
 
     const row = db.prepare('SELECT * FROM turnos_caja WHERE id = ?').get(turnoId)
     return mapTurno(row as Record<string, unknown>)

@@ -192,6 +192,18 @@ export interface NuevaCompraRequest {
   items: { productoId: number; cantidad: number; precioUnitario: number; subtotal: number }[]
 }
 
+export interface SugerenciaReorden {
+  productoId: number
+  nombreProducto: string
+  stockActual: number
+  stockMinimo: number
+  stockMaximo: number | null
+  cantidadSugerida: number
+  precioCosto: number
+  proveedorId: number | null
+  nombreProveedor: string | null
+}
+
 // Reportes
 
 export interface FilaVentaReporte {
@@ -292,4 +304,39 @@ export interface Promocion {
   vigenciaHasta: string | null
   activa: boolean
   createdAt: string
+}
+
+export type TicketAncho = '58mm' | '80mm'
+
+export interface ImpresionConfig {
+  anchoTicket: TicketAncho
+  printerName: string
+}
+
+export interface ImpresoraSistema {
+  name: string
+  displayName: string
+  isDefault: boolean
+  status: number
+}
+
+export interface AuditoriaEntry {
+  id: number
+  usuarioId: number | null
+  nombreUsuario: string | null
+  accion: string
+  tabla: string | null
+  referenciaId: number | null
+  detalle: string | null
+  fecha: string
+}
+
+export interface FilaCuentaCorrienteReporte {
+  clienteId: number
+  nombreCliente: string
+  saldoActual: number
+  limiteCredito: number
+  totalVendidoPeriodo: number
+  totalCobradoPeriodo: number
+  cantidadVentas: number
 }

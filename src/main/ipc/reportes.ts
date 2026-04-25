@@ -129,6 +129,53 @@ export function registerReportesHandlers(): void {
     }))
   })
 
+  handle('reportes:cuentaCorriente', ({ desde, hasta, clienteId }) => {
+    const db = getSqlite()
+
+    const filas = db.prepare(`
+      SELECT
+        c.id AS cliente_id,
+        c.nombre AS nombre_cliente,
+        c.saldo_cuenta_corriente AS saldo_actual,
+        c.limite_credito,
+        COALESCE(SUM(CASE WHEN v.estado = 'completada' THEN pv.monto ELSE 0 END), 0) AS total_vendido,
+        COALESCE(co.total_cobrado, 0) AS total_cobrado,
+        COUNT(DISTINCT CASE WHEN v.estado = 'completada' THEN v.id END) AS cantidad_ventas
+      FROM clientes c
+      LEFT JOIN ventas v ON v.cliente_id = c.id
+        AND date(v.fecha) >= date(?) AND date(v.fecha) <= date(?)
+      LEFT JOIN pagos_venta pv ON pv.venta_id = v.id AND pv.medio_pago = 'cuenta_corriente'
+      LEFT JOIN (
+        SELECT cliente_id, SUM(monto) AS total_cobrado
+        FROM cobranzas
+        WHERE date(fecha) >= date(?) AND date(fecha) <= date(?)
+        GROUP BY cliente_id
+      ) co ON co.cliente_id = c.id
+      WHERE c.activo = 1 ${clienteId ? 'AND c.id = ?' : ''}
+      GROUP BY c.id
+      HAVING total_vendido > 0 OR COALESCE(co.total_cobrado, 0) > 0 OR c.saldo_cuenta_corriente > 0
+      ORDER BY c.saldo_cuenta_corriente DESC
+    `).all(desde, hasta, desde, hasta, ...(clienteId ? [clienteId] : [])) as Record<string, unknown>[]
+
+    return {
+      filas: filas.map(f => ({
+        clienteId: f.cliente_id as number,
+        nombreCliente: f.nombre_cliente as string,
+        saldoActual: f.saldo_actual as number,
+        limiteCredito: f.limite_credito as number,
+        totalVendidoPeriodo: f.total_vendido as number,
+        totalCobradoPeriodo: f.total_cobrado as number,
+        cantidadVentas: f.cantidad_ventas as number,
+      })),
+      resumen: {
+        totalDeuda: filas.reduce((s, f) => s + (f.saldo_actual as number), 0),
+        totalCobrado: filas.reduce((s, f) => s + (f.total_cobrado as number), 0),
+        saldoFinal: filas.reduce((s, f) => s + (f.saldo_actual as number), 0),
+        clientesConDeuda: filas.filter(f => (f.saldo_actual as number) > 0).length,
+      },
+    }
+  })
+
   handle('reportes:stockValorizado', () => {
     const db = getSqlite()
     const rows = db.prepare(`

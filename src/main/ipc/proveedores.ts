@@ -1,6 +1,8 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
-import type { Proveedor, OrdenCompra } from '../../shared/types'
+import type { Proveedor, OrdenCompra, SugerenciaReorden } from '../../shared/types'
+import { assertPermisoUsuario } from './permisos'
+import { registrarAuditoria } from './auditoria'
 
 export function registerProveedoresHandlers(): void {
   handle('proveedores:list', () => {
@@ -53,6 +55,7 @@ export function registerProveedoresHandlers(): void {
 
   handle('compras:crear', (data) => {
     const db = getSqlite()
+    assertPermisoUsuario(db, data.usuarioId, 'compras:gestionar')
     const crearOC = db.transaction(() => {
       const total = data.items.reduce((s, i) => s + i.subtotal, 0)
       const result = db.prepare(`
@@ -68,6 +71,13 @@ export function registerProveedoresHandlers(): void {
       for (const item of data.items) {
         itemStmt.run(compraId, item.productoId, item.cantidad, item.precioUnitario, item.subtotal)
       }
+      registrarAuditoria(db, {
+        usuarioId: data.usuarioId,
+        accion: 'orden_compra_creada',
+        tabla: 'compras',
+        referenciaId: compraId,
+        detalle: { proveedorId: data.proveedorId, total, items: data.items.length },
+      })
       return compraId
     })
     const compraId = crearOC()
@@ -80,6 +90,7 @@ export function registerProveedoresHandlers(): void {
 
   handle('compras:recibir', ({ compraId, usuarioId }) => {
     const db = getSqlite()
+    assertPermisoUsuario(db, usuarioId, 'compras:gestionar')
     const recibir = db.transaction(() => {
       const compra = db.prepare('SELECT * FROM compras WHERE id = ?').get(compraId) as Record<string, unknown> | undefined
       if (!compra) throw new Error('Orden de compra no encontrada')
@@ -105,6 +116,13 @@ export function registerProveedoresHandlers(): void {
       }
 
       db.prepare("UPDATE compras SET estado = 'recibida' WHERE id = ?").run(compraId)
+      registrarAuditoria(db, {
+        usuarioId,
+        accion: 'orden_compra_recibida',
+        tabla: 'compras',
+        referenciaId: compraId,
+        detalle: { items: items.length },
+      })
     })
     recibir()
   })
@@ -132,6 +150,70 @@ export function registerProveedoresHandlers(): void {
         subtotal: i.subtotal as number,
       })),
     }
+  })
+
+  handle('compras:sugerenciasReorden', ({ proveedorId, categoriaId }) => {
+    const db = getSqlite()
+    const filtros: string[] = []
+    const params: number[] = []
+
+    if (proveedorId) {
+      filtros.push('prov.id = ?')
+      params.push(proveedorId)
+    }
+    if (categoriaId) {
+      filtros.push('p.categoria_id = ?')
+      params.push(categoriaId)
+    }
+
+    const rows = db.prepare(`
+      SELECT
+        p.id AS producto_id,
+        p.nombre AS nombre_producto,
+        p.stock_actual,
+        p.stock_minimo,
+        p.stock_maximo,
+        p.precio_costo,
+        prov.id AS proveedor_id,
+        prov.nombre AS nombre_proveedor
+      FROM productos p
+      LEFT JOIN productos_proveedores pp ON pp.producto_id = p.id
+      LEFT JOIN proveedores prov ON prov.id = pp.proveedor_id AND COALESCE(prov.activo, 1) = 1
+      WHERE p.activo = 1
+        AND p.stock_minimo > 0
+        AND p.stock_actual <= p.stock_minimo
+        ${filtros.length > 0 ? `AND ${filtros.join(' AND ')}` : ''}
+      ORDER BY prov.nombre IS NULL, prov.nombre, p.nombre
+    `).all(...params) as Record<string, unknown>[]
+
+    const vistos = new Set<number>()
+    const sugerencias: SugerenciaReorden[] = []
+
+    for (const row of rows) {
+      const productoId = row.producto_id as number
+      if (vistos.has(productoId)) continue
+      vistos.add(productoId)
+
+      const stockActual = row.stock_actual as number
+      const stockMinimo = row.stock_minimo as number
+      const stockMaximo = row.stock_maximo as number | null
+      const objetivo = stockMaximo && stockMaximo > stockMinimo ? stockMaximo : stockMinimo
+      const cantidadSugerida = Math.max(1, Math.ceil(objetivo - stockActual))
+
+      sugerencias.push({
+        productoId,
+        nombreProducto: row.nombre_producto as string,
+        stockActual,
+        stockMinimo,
+        stockMaximo,
+        cantidadSugerida,
+        precioCosto: row.precio_costo as number,
+        proveedorId: row.proveedor_id as number | null,
+        nombreProveedor: row.nombre_proveedor as string | null,
+      })
+    }
+
+    return sugerencias
   })
 }
 

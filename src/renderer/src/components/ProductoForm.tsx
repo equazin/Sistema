@@ -6,6 +6,7 @@ import type { Producto, UnidadMedida } from '../../../shared/types'
 
 interface ProductoFormProps {
   producto: Producto | null
+  usuarioId?: number
   onSaved: () => void
   onCancel: () => void
 }
@@ -38,7 +39,7 @@ function toForm(p: Producto | null): FormData {
   }
 }
 
-export function ProductoForm({ producto, onSaved, onCancel }: ProductoFormProps): JSX.Element {
+export function ProductoForm({ producto, usuarioId, onSaved, onCancel }: ProductoFormProps): JSX.Element {
   const { createProducto, updateProducto } = useProductosStore()
   const [form, setForm] = useState<FormData>(toForm(producto))
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
@@ -80,9 +81,9 @@ export function ProductoForm({ producto, onSaved, onCancel }: ProductoFormProps)
         activo: true,
       }
       if (producto) {
-        await updateProducto(producto.id, data)
+        await updateProducto(producto.id, data, usuarioId)
       } else {
-        await createProducto(data)
+        await createProducto(data, usuarioId)
       }
       onSaved()
     } catch (err) {
@@ -90,7 +91,7 @@ export function ProductoForm({ producto, onSaved, onCancel }: ProductoFormProps)
     } finally {
       setIsSubmitting(false)
     }
-  }, [form, producto, createProducto, updateProducto, onSaved])
+  }, [form, producto, usuarioId, createProducto, updateProducto, onSaved])
 
   return (
     <div className="flex flex-col gap-4">

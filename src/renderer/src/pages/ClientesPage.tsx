@@ -104,9 +104,9 @@ export function ClientesPage(): JSX.Element {
         limiteCredito: Number(form.limiteCredito) || 0,
       }
       if (modalMode === 'crear') {
-        await invoke('clientes:create', base)
+        await invoke('clientes:create', { ...base, usuarioId: usuario?.id })
       } else if (clienteSeleccionado) {
-        await invoke('clientes:update', { id: clienteSeleccionado.id, ...base })
+        await invoke('clientes:update', { id: clienteSeleccionado.id, ...base, usuarioId: usuario?.id })
       }
       setModalMode(null)
       cargar()
@@ -118,12 +118,12 @@ export function ClientesPage(): JSX.Element {
   const handleEliminar = useCallback(async (c: Cliente) => {
     if (!confirm(`¿Eliminar a ${c.nombre}?`)) return
     try {
-      await invoke('clientes:delete', { id: c.id })
+      await invoke('clientes:delete', { id: c.id, usuarioId: usuario?.id })
       cargar()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error al eliminar')
     }
-  }, [cargar])
+  }, [cargar, usuario])
 
   const handleRegistrarCobranza = useCallback(async () => {
     if (!clienteSeleccionado || !usuario) return

@@ -7,9 +7,11 @@ import { Badge } from '../components/ui/Badge'
 import { Modal } from '../components/ui/Modal'
 import { ProductoForm } from '../components/ProductoForm'
 import { formatPrecio } from '../lib/format'
+import { useAuthStore } from '../stores/auth.store'
 import type { Producto } from '../../../shared/types'
 
 export function ProductosPage(): JSX.Element {
+  const { usuario } = useAuthStore()
   const {
     productos, total, isLoading, search,
     fetchProductos, fetchCategorias, setSearch,
@@ -36,8 +38,8 @@ export function ProductosPage(): JSX.Element {
 
   const handleEliminar = useCallback(async (p: Producto) => {
     if (!confirm(`¿Desactivar "${p.nombre}"?`)) return
-    await deleteProducto(p.id)
-  }, [deleteProducto])
+    await deleteProducto(p.id, usuario?.id)
+  }, [deleteProducto, usuario])
 
   const handleClose = useCallback(() => {
     setModalOpen(false)
@@ -152,6 +154,7 @@ export function ProductosPage(): JSX.Element {
       >
         <ProductoForm
           producto={editando}
+          usuarioId={usuario?.id}
           onSaved={handleSaved}
           onCancel={handleClose}
         />

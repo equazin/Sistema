@@ -7,14 +7,14 @@ import { Badge } from '../components/ui/Badge'
 import { formatPrecio, formatFecha } from '../lib/format'
 import { useAuthStore } from '../stores/auth.store'
 import { useProductosStore } from '../stores/productos.store'
-import type { Proveedor, OrdenCompra, ItemOrdenCompra } from '../../../shared/types'
+import type { Proveedor, OrdenCompra, ItemOrdenCompra, SugerenciaReorden } from '../../../shared/types'
 
 type Tab = 'proveedores' | 'compras'
 type ModalMode = 'crear_prov' | 'editar_prov' | 'nueva_oc' | 'detalle_oc' | null
 
 export function ProveedoresPage(): JSX.Element {
   const { usuario } = useAuthStore()
-  const { productos, fetchProductos } = useProductosStore()
+  const { productos, categorias, fetchProductos, fetchCategorias } = useProductosStore()
 
   const [tab, setTab] = useState<Tab>('proveedores')
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
@@ -23,6 +23,9 @@ export function ProveedoresPage(): JSX.Element {
   const [provSeleccionado, setProvSeleccionado] = useState<Proveedor | null>(null)
   const [detalleOC, setDetalleOC] = useState<(OrdenCompra & { items: ItemOrdenCompra[] }) | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [sugerenciasReorden, setSugerenciasReorden] = useState<SugerenciaReorden[]>([])
+  const [filtroReordenProveedorId, setFiltroReordenProveedorId] = useState<number | null>(null)
+  const [filtroReordenCategoriaId, setFiltroReordenCategoriaId] = useState<number | null>(null)
 
   // Form proveedor
   const [formProv, setFormProv] = useState({ nombre: '', cuit: '', telefono: '', email: '', condicionPago: '' })
@@ -42,19 +45,27 @@ export function ProveedoresPage(): JSX.Element {
   const cargarCompras = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await invoke('compras:list', {})
+      const [res, sugerencias] = await Promise.all([
+        invoke('compras:list', {}),
+        invoke('compras:sugerenciasReorden', {
+          proveedorId: filtroReordenProveedorId ?? undefined,
+          categoriaId: filtroReordenCategoriaId ?? undefined,
+        }),
+      ])
       setCompras(res)
+      setSugerenciasReorden(sugerencias)
     } finally { setIsLoading(false) }
-  }, [])
+  }, [filtroReordenProveedorId, filtroReordenCategoriaId])
 
   useEffect(() => {
     cargarProveedores()
     fetchProductos()
+    fetchCategorias()
   }, [])
 
   useEffect(() => {
     if (tab === 'compras') cargarCompras()
-  }, [tab])
+  }, [tab, cargarCompras])
 
   const abrirCrearProv = useCallback(() => {
     setFormProv({ nombre: '', cuit: '', telefono: '', email: '', condicionPago: '' })
@@ -103,6 +114,25 @@ export function ProveedoresPage(): JSX.Element {
     setItemsOC([])
     setModalMode('nueva_oc')
   }, [])
+
+  const aplicarSugerenciasReorden = useCallback((sugerencias: SugerenciaReorden[] = sugerenciasReorden) => {
+    if (sugerencias.length === 0) return alert('No hay productos bajo mínimo')
+
+    const proveedoresSugeridos = Array.from(new Set(
+      sugerencias.map((s) => s.proveedorId).filter((id): id is number => id !== null)
+    ))
+    if (proveedoresSugeridos.length === 1) {
+      setProvOCId(proveedoresSugeridos[0])
+    }
+
+    setItemsOC(sugerencias.map((s) => ({
+      productoId: s.productoId,
+      nombre: s.nombreProducto,
+      cantidad: String(s.cantidadSugerida),
+      precioUnitario: String(s.precioCosto),
+    })))
+    setModalMode('nueva_oc')
+  }, [sugerenciasReorden])
 
   const agregarItemOC = useCallback(() => {
     setItemsOC(prev => [...prev, { productoId: 0, nombre: '', cantidad: '1', precioUnitario: '0' }])
@@ -166,6 +196,11 @@ export function ProveedoresPage(): JSX.Element {
         <h1 className="text-2xl font-bold text-slate-800">Proveedores y Compras</h1>
         <div className="flex gap-2">
           {tab === 'proveedores' && <Button onClick={abrirCrearProv}>+ Nuevo proveedor</Button>}
+          {tab === 'compras' && sugerenciasReorden.length > 0 && (
+            <Button variant="outline" onClick={() => aplicarSugerenciasReorden()}>
+              Sugerir reorden ({sugerenciasReorden.length})
+            </Button>
+          )}
           {tab === 'compras' && <Button onClick={abrirNuevaOC}>+ Nueva orden de compra</Button>}
         </div>
       </div>
@@ -219,8 +254,50 @@ export function ProveedoresPage(): JSX.Element {
       )}
 
       {tab === 'compras' && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="flex flex-col gap-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-500">Proveedor para reorden</label>
+              <select
+                value={filtroReordenProveedorId ?? ''}
+                onChange={(e) => setFiltroReordenProveedorId(Number(e.target.value) || null)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm min-w-56"
+              >
+                <option value="">Todos los proveedores</option>
+                {proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-slate-500">Categoria</label>
+              <select
+                value={filtroReordenCategoriaId ?? ''}
+                onChange={(e) => setFiltroReordenCategoriaId(Number(e.target.value) || null)}
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm min-w-52"
+              >
+                <option value="">Todas las categorias</option>
+                {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </div>
+            <Button variant="outline" onClick={cargarCompras} disabled={isLoading} size="sm">
+              Aplicar filtros
+            </Button>
+          </div>
+
+          {sugerenciasReorden.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-amber-900">Productos bajo mínimo</p>
+                <p className="text-sm text-amber-700">
+                  {sugerenciasReorden.length} producto{sugerenciasReorden.length !== 1 ? 's' : ''} necesita{sugerenciasReorden.length === 1 ? '' : 'n'} reposición.
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => aplicarSugerenciasReorden()}>
+                Crear orden sugerida
+              </Button>
+            </div>
+          )}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="text-left px-4 py-3 text-slate-600 font-semibold">#</th>
@@ -251,7 +328,8 @@ export function ProveedoresPage(): JSX.Element {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       )}
 
@@ -300,7 +378,14 @@ export function ProveedoresPage(): JSX.Element {
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-semibold text-slate-700">Items</p>
-              <Button size="sm" variant="outline" onClick={agregarItemOC}>+ Agregar producto</Button>
+              <div className="flex gap-2">
+                {sugerenciasReorden.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => aplicarSugerenciasReorden()}>
+                    Usar stock bajo
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" onClick={agregarItemOC}>+ Agregar producto</Button>
+              </div>
             </div>
             {itemsOC.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-4">Sin items. Agregá productos a la orden.</p>

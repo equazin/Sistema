@@ -110,7 +110,9 @@ export const clientes = sqliteTable('clientes', {
   telefono: text('telefono'),
   email: text('email'),
   condicionAfip: text('condicion_afip'),
+  limiteCredito: real('limite_credito').notNull().default(0),
   saldoCuentaCorriente: real('saldo_cuenta_corriente').notNull().default(0),
+  activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
 })
 
 export const ventas = sqliteTable(
@@ -190,6 +192,7 @@ export const proveedores = sqliteTable('proveedores', {
   telefono: text('telefono'),
   email: text('email'),
   condicionPago: text('condicion_pago'),
+  activo: integer('activo', { mode: 'boolean' }).notNull().default(true),
 })
 
 export const productosProveedores = sqliteTable(
@@ -244,4 +247,38 @@ export const auditLog = sqliteTable('audit_log', {
   referenciaId: integer('referencia_id'),
   detalle: text('detalle'),
   fecha: text('fecha').notNull().default("(datetime('now','localtime'))"),
+})
+
+export const cobranzas = sqliteTable('cobranzas', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  clienteId: integer('cliente_id').notNull().references(() => clientes.id),
+  usuarioId: integer('usuario_id').notNull().references(() => usuarios.id),
+  monto: real('monto').notNull(),
+  medioPago: text('medio_pago').notNull().default('efectivo'),
+  observacion: text('observacion'),
+  fecha: text('fecha').notNull().default("(datetime('now','localtime'))"),
+})
+
+export const promociones = sqliteTable('promociones', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  negocioId: integer('negocio_id').notNull().references(() => negocios.id),
+  nombre: text('nombre').notNull(),
+  tipo: text('tipo', {
+    enum: [
+      'porcentaje_producto',
+      'porcentaje_categoria',
+      'porcentaje_medio_pago',
+      '2x1',
+      '3x2',
+      'monto_fijo',
+    ],
+  }).notNull(),
+  valor: real('valor').notNull().default(0),
+  productoId: integer('producto_id').references(() => productos.id),
+  categoriaId: integer('categoria_id').references(() => categorias.id),
+  medioPago: text('medio_pago'),
+  vigenciaDesde: text('vigencia_desde'),
+  vigenciaHasta: text('vigencia_hasta'),
+  activa: integer('activa', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull().default("(datetime('now','localtime'))"),
 })

@@ -14,6 +14,7 @@ import { registerMercadoPagoHandlers } from './mercadopago'
 import { registerPromocionesHandlers } from './promociones'
 import { registerPreciosHandlers } from './precios'
 import { registerBackupHandlers } from './backup'
+import { registerAuditoriaHandlers } from './auditoria'
 
 export function registerAllHandlers(): void {
   registerProductosHandlers()
@@ -32,4 +33,5 @@ export function registerAllHandlers(): void {
   registerPromocionesHandlers()
   registerPreciosHandlers()
   registerBackupHandlers()
+  registerAuditoriaHandlers()
 }

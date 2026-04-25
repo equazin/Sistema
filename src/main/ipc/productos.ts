@@ -1,6 +1,7 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { Producto } from '../../shared/types'
+import { registrarAuditoria } from './auditoria'
 
 export function registerProductosHandlers(): void {
   handle('productos:list', ({ page = 1, limit = 50, search, categoriaId }) => {
@@ -64,11 +65,18 @@ export function registerProductosHandlers(): void {
       data.stockMaximo ?? null,
       data.pesable ? 1 : 0
     )
+    registrarAuditoria(db, {
+      usuarioId: data.usuarioId,
+      accion: 'producto_creado',
+      tabla: 'productos',
+      referenciaId: result.lastInsertRowid as number,
+      detalle: { nombre: data.nombre, precioVenta: data.precioVenta, stockActual: data.stockActual },
+    })
     const row = db.prepare('SELECT * FROM productos WHERE id = ?').get(result.lastInsertRowid)
     return mapProducto(row as Record<string, unknown>)
   })
 
-  handle('productos:update', ({ id, ...data }) => {
+  handle('productos:update', ({ id, usuarioId, ...data }) => {
     const db = getSqlite()
     const fields: string[] = []
     const values: unknown[] = []
@@ -104,13 +112,26 @@ export function registerProductosHandlers(): void {
     values.push(id)
 
     db.prepare(`UPDATE productos SET ${fields.join(', ')} WHERE id = ?`).run(...values)
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'producto_actualizado',
+      tabla: 'productos',
+      referenciaId: id,
+      detalle: Object.keys(data),
+    })
     const row = db.prepare('SELECT * FROM productos WHERE id = ?').get(id)
     return mapProducto(row as Record<string, unknown>)
   })
 
-  handle('productos:delete', ({ id }) => {
+  handle('productos:delete', ({ id, usuarioId }) => {
     const db = getSqlite()
     db.prepare("UPDATE productos SET activo = 0 WHERE id = ?").run(id)
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'producto_desactivado',
+      tabla: 'productos',
+      referenciaId: id,
+    })
   })
 }
 

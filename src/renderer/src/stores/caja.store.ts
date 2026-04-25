@@ -9,7 +9,7 @@ interface CajaState {
 
   fetchTurno: (cajaId: number) => Promise<void>
   abrirTurno: (cajaId: number, usuarioId: number, montoApertura: number) => Promise<TurnoCaja>
-  cerrarTurno: (turnoId: number, montoCierreDeclado: number) => Promise<TurnoCaja>
+  cerrarTurno: (turnoId: number, montoCierreDeclado: number, usuarioId: number) => Promise<TurnoCaja>
   fetchVentasDelTurno: () => Promise<void>
 }
 
@@ -34,8 +34,8 @@ export const useCajaStore = create<CajaState>((set, get) => ({
     return turno
   },
 
-  cerrarTurno: async (turnoId, montoCierreDeclado) => {
-    const turno = await invoke('turno:cerrar', { turnoId, montoCierreDeclado })
+  cerrarTurno: async (turnoId, montoCierreDeclado, usuarioId) => {
+    const turno = await invoke('turno:cerrar', { turnoId, montoCierreDeclado, usuarioId })
     set({ turnoActual: null, ventasDelTurno: [] })
     return turno
   },

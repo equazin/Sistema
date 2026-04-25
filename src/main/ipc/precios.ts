@@ -1,6 +1,7 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { PreviewPrecio, ActualizacionMasiva } from '../../shared/types'
+import { assertPermisoUsuario } from './permisos'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,7 @@ export function registerPreciosHandlers(): void {
   handle('precios:aplicar', (req) => {
     const db = getSqlite()
     const { usuarioId, ...actualizacion } = req
+    assertPermisoUsuario(db, usuarioId, 'precios:actualizar')
 
     // Reuse preview logic to get the list of changes
     let previews: PreviewPrecio[]

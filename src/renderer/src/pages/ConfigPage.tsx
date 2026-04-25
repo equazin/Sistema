@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '../lib/api'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import type { Negocio } from '../../../shared/types'
+import type { ImpresionConfig, ImpresoraSistema, Negocio, TicketAncho } from '../../../shared/types'
 
 type MpFormData = { accessToken: string; posId: string; sucursalId: string }
 type BackupConfig = { carpeta: string; frecuencia: 'diario' | 'semanal' | 'manual' }
@@ -34,6 +34,11 @@ export function ConfigPage(): JSX.Element {
   const [savedMp, setSavedMp] = useState(false)
   const [mpError, setMpError] = useState<string | null>(null)
 
+  const [impresionConfig, setImpresionConfig] = useState<ImpresionConfig>({ anchoTicket: '80mm', printerName: '' })
+  const [impresoras, setImpresoras] = useState<ImpresoraSistema[]>([])
+  const [isSavingImpresion, setIsSavingImpresion] = useState(false)
+  const [savedImpresion, setSavedImpresion] = useState(false)
+
   const [backupConfig, setBackupConfig] = useState<BackupConfig>({ carpeta: '', frecuencia: 'diario' })
   const [backupLoading, setBackupLoading] = useState(false)
   const [backupMensaje, setBackupMensaje] = useState<string | null>(null)
@@ -44,6 +49,8 @@ export function ConfigPage(): JSX.Element {
   useEffect(() => {
     invoke('negocio:get', {}).then((n) => { if (n) setForm(toForm(n)); setIsLoading(false) })
     invoke('config:mp:get', {}).then((mp) => { if (mp) setMpForm(mp) }).catch(() => {})
+    invoke('config:impresion:get', {}).then(setImpresionConfig).catch(() => {})
+    invoke('config:impresion:listPrinters', {}).then(setImpresoras).catch(() => {})
     invoke('backup:getConfig', {}).then((cfg) => { if (cfg) setBackupConfig(cfg) }).catch(() => {})
     invoke('backup:listar', {}).then(setBackups).catch(() => {})
 
@@ -74,6 +81,23 @@ export function ConfigPage(): JSX.Element {
     catch (err) { setMpError(err instanceof Error ? err.message : 'Error al guardar') }
     finally { setIsSavingMp(false) }
   }, [mpForm])
+
+  const setImpresion = useCallback(<K extends keyof ImpresionConfig>(key: K, value: ImpresionConfig[K]) => {
+    setImpresionConfig((prev) => ({ ...prev, [key]: value }))
+    setSavedImpresion(false)
+  }, [])
+
+  const handleSaveImpresion = useCallback(async () => {
+    setIsSavingImpresion(true)
+    try {
+      await invoke('config:impresion:set', impresionConfig)
+      setSavedImpresion(true)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al guardar impresión')
+    } finally {
+      setIsSavingImpresion(false)
+    }
+  }, [impresionConfig])
 
   const handleSeleccionarCarpeta = useCallback(async () => {
     const carpeta = await window.api.invokeRaw('backup:seleccionarCarpeta') as string | null
@@ -162,6 +186,54 @@ export function ConfigPage(): JSX.Element {
         <div className="flex items-center gap-4 pt-2 border-t border-slate-100">
           <Button onClick={handleSaveMp} disabled={isSavingMp}>{isSavingMp ? 'Guardando...' : 'Guardar credenciales'}</Button>
           {savedMp && <span className="text-green-600 text-sm font-medium">✓ Guardado</span>}
+        </div>
+      </div>
+
+      {/* Impresion */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="font-semibold text-slate-700 mb-1">Impresión de tickets</h2>
+          <p className="text-xs text-slate-500">Formato usado para la vista previa y la impresión de venta/cierre.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Ancho de ticket</label>
+            <select
+              value={impresionConfig.anchoTicket}
+              onChange={(e) => setImpresion('anchoTicket', e.target.value as TicketAncho)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="80mm">80mm</option>
+              <option value="58mm">58mm</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Impresora preferida</label>
+            <select
+              value={impresionConfig.printerName}
+              onChange={(e) => setImpresion('printerName', e.target.value)}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="">Elegir al imprimir</option>
+              {impresoras.map((impresora) => (
+                <option key={impresora.name} value={impresora.name}>
+                  {impresora.displayName}{impresora.isDefault ? ' (predeterminada)' : ''}
+                </option>
+              ))}
+              {impresionConfig.printerName && !impresoras.some((i) => i.name === impresionConfig.printerName) && (
+                <option value={impresionConfig.printerName}>{impresionConfig.printerName}</option>
+              )}
+            </select>
+            {impresoras.length === 0 && (
+              <p className="text-xs text-slate-500">No se detectaron impresoras instaladas.</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-4 pt-2 border-t border-slate-100">
+          <Button onClick={handleSaveImpresion} disabled={isSavingImpresion}>
+            {isSavingImpresion ? 'Guardando...' : 'Guardar impresión'}
+          </Button>
+          {savedImpresion && <span className="text-green-600 text-sm font-medium">✓ Guardado</span>}
         </div>
       </div>
 

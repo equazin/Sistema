@@ -1,6 +1,7 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { Cliente } from '../../shared/types'
+import { registrarAuditoria } from './auditoria'
 
 export function registerClientesHandlers(): void {
   handle('clientes:list', ({ search }) => {
@@ -39,11 +40,18 @@ export function registerClientesHandlers(): void {
       data.condicionAfip ?? 'consumidor_final',
       data.limiteCredito ?? 0
     )
+    registrarAuditoria(db, {
+      usuarioId: data.usuarioId,
+      accion: 'cliente_creado',
+      tabla: 'clientes',
+      referenciaId: result.lastInsertRowid as number,
+      detalle: { nombre: data.nombre, limiteCredito: data.limiteCredito ?? 0 },
+    })
     const row = db.prepare('SELECT * FROM clientes WHERE id = ?').get(result.lastInsertRowid)
     return mapCliente(row as Record<string, unknown>)
   })
 
-  handle('clientes:update', ({ id, ...data }) => {
+  handle('clientes:update', ({ id, usuarioId, ...data }) => {
     const db = getSqlite()
     db.prepare(`
       UPDATE clientes
@@ -58,13 +66,26 @@ export function registerClientesHandlers(): void {
       data.limiteCredito ?? 0,
       id
     )
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'cliente_actualizado',
+      tabla: 'clientes',
+      referenciaId: id,
+      detalle: { nombre: data.nombre, limiteCredito: data.limiteCredito ?? 0 },
+    })
     const row = db.prepare('SELECT * FROM clientes WHERE id = ?').get(id)
     return mapCliente(row as Record<string, unknown>)
   })
 
-  handle('clientes:delete', ({ id }) => {
+  handle('clientes:delete', ({ id, usuarioId }) => {
     const db = getSqlite()
     db.prepare('UPDATE clientes SET activo = 0 WHERE id = ?').run(id)
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'cliente_desactivado',
+      tabla: 'clientes',
+      referenciaId: id,
+    })
   })
 
   handle('clientes:estadoCuenta', ({ clienteId }) => {
@@ -118,6 +139,13 @@ export function registerClientesHandlers(): void {
       `).run(monto, clienteId)
     })
     registrar()
+    registrarAuditoria(db, {
+      usuarioId,
+      accion: 'cobranza_registrada',
+      tabla: 'clientes',
+      referenciaId: clienteId,
+      detalle: { monto, medioPago, observacion: observacion ?? null },
+    })
   })
 }
 

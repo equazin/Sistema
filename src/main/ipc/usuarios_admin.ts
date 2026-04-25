@@ -1,6 +1,7 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { Usuario } from '../../shared/types'
+import { registrarAuditoria } from './auditoria'
 
 export function registerUsuariosAdminHandlers(): void {
   handle('usuarios:update', ({ id, ...data }) => {
@@ -25,6 +26,12 @@ export function registerUsuariosAdminHandlers(): void {
         ? [data.nombre, data.rol, data.pin, data.activo ? 1 : 0, id]
         : [data.nombre, data.rol, data.activo ? 1 : 0, id])
     )
+    registrarAuditoria(db, {
+      accion: 'usuario_actualizado',
+      tabla: 'usuarios',
+      referenciaId: id,
+      detalle: { nombre: data.nombre, rol: data.rol, activo: data.activo, cambioPin: Boolean(data.pin) },
+    })
 
     const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id)
     return mapUsuario(row as Record<string, unknown>)
@@ -38,6 +45,11 @@ export function registerUsuariosAdminHandlers(): void {
       throw new Error('No se puede eliminar el único administrador')
     }
     db.prepare('UPDATE usuarios SET activo = 0 WHERE id = ?').run(id)
+    registrarAuditoria(db, {
+      accion: 'usuario_desactivado',
+      tabla: 'usuarios',
+      referenciaId: id,
+    })
   })
 
   handle('usuarios:listAll', () => {

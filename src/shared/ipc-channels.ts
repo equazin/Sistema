@@ -12,15 +12,15 @@ export interface IpcChannelMap {
     response: import('./types').Producto
   }
   'productos:create': {
-    request: Omit<import('./types').Producto, 'id' | 'updatedAt'>
+    request: Omit<import('./types').Producto, 'id' | 'updatedAt'> & { usuarioId?: number }
     response: import('./types').Producto
   }
   'productos:update': {
-    request: { id: number } & Partial<import('./types').Producto>
+    request: { id: number; usuarioId?: number } & Partial<import('./types').Producto>
     response: import('./types').Producto
   }
   'productos:delete': {
-    request: { id: number }
+    request: { id: number; usuarioId?: number }
     response: void
   }
   'productos:findByBarcode': {
@@ -64,7 +64,7 @@ export interface IpcChannelMap {
     response: import('./types').TurnoCaja
   }
   'turno:cerrar': {
-    request: { turnoId: number; montoCierreDeclado: number }
+    request: { turnoId: number; montoCierreDeclado: number; usuarioId: number }
     response: import('./types').TurnoCaja
   }
   'turno:actual': {
@@ -103,15 +103,15 @@ export interface IpcChannelMap {
     response: import('./types').Cliente
   }
   'clientes:create': {
-    request: Omit<import('./types').Cliente, 'id' | 'saldoCuentaCorriente' | 'activo'>
+    request: Omit<import('./types').Cliente, 'id' | 'saldoCuentaCorriente' | 'activo'> & { usuarioId?: number }
     response: import('./types').Cliente
   }
   'clientes:update': {
-    request: { id: number } & Partial<Omit<import('./types').Cliente, 'id' | 'saldoCuentaCorriente'>>
+    request: { id: number; usuarioId?: number } & Partial<Omit<import('./types').Cliente, 'id' | 'saldoCuentaCorriente'>>
     response: import('./types').Cliente
   }
   'clientes:delete': {
-    request: { id: number }
+    request: { id: number; usuarioId?: number }
     response: void
   }
   'clientes:estadoCuenta': {
@@ -126,6 +126,13 @@ export interface IpcChannelMap {
   'clientes:registrarCobranza': {
     request: { clienteId: number; monto: number; medioPago: string; observacion?: string; usuarioId: number }
     response: void
+  }
+  'reportes:cuentaCorriente': {
+    request: { desde: string; hasta: string; clienteId?: number }
+    response: {
+      filas: import('./types').FilaCuentaCorrienteReporte[]
+      resumen: { totalDeuda: number; totalCobrado: number; saldoFinal: number; clientesConDeuda: number }
+    }
   }
   // Proveedores
   'proveedores:list': {
@@ -161,6 +168,10 @@ export interface IpcChannelMap {
     request: { compraId: number; usuarioId: number }
     response: void
   }
+  'compras:sugerenciasReorden': {
+    request: { proveedorId?: number; categoriaId?: number }
+    response: import('./types').SugerenciaReorden[]
+  }
   // Usuarios admin
   'usuarios:update': {
     request: { id: number; nombre: string; rol: import('./types').RolUsuario; pin?: string; activo: boolean; negocioId?: number }
@@ -174,6 +185,11 @@ export interface IpcChannelMap {
     request: Record<string, never>
     response: import('./types').Usuario[]
   }
+  // Auditoria
+  'auditoria:list': {
+    request: { limit?: number }
+    response: import('./types').AuditoriaEntry[]
+  }
   // Impresión
   'impresion:ticketVenta': {
     request: { ventaId: number }
@@ -182,6 +198,26 @@ export interface IpcChannelMap {
   'impresion:ticketCierre': {
     request: { turnoId: number }
     response: boolean
+  }
+  'impresion:previewVenta': {
+    request: { ventaId: number }
+    response: { html: string; anchoTicket: import('./types').TicketAncho }
+  }
+  'impresion:previewCierre': {
+    request: { turnoId: number }
+    response: { html: string; anchoTicket: import('./types').TicketAncho }
+  }
+  'config:impresion:get': {
+    request: Record<string, never>
+    response: import('./types').ImpresionConfig
+  }
+  'config:impresion:set': {
+    request: import('./types').ImpresionConfig
+    response: void
+  }
+  'config:impresion:listPrinters': {
+    request: Record<string, never>
+    response: import('./types').ImpresoraSistema[]
   }
   // Reportes
   'reportes:ventas': {

@@ -8,6 +8,7 @@ interface AuthState {
   error: string | null
   login: (pin: string) => Promise<boolean>
   logout: () => void
+  setUsuario: (usuario: Usuario) => void
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -28,4 +29,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => set({ usuario: null, error: null }),
+
+  setUsuario: (usuario) => set({ usuario }),
 }))

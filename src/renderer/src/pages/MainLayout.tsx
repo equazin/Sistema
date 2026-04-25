@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuthStore } from '../stores/auth.store'
 import { PuntoVentaPage } from './PuntoVentaPage'
 import { ProductosPage } from './ProductosPage'
@@ -11,21 +11,22 @@ import { ProveedoresPage } from './ProveedoresPage'
 import { UsuariosPage } from './UsuariosPage'
 import { PromocionesPage } from './PromocionesPage'
 import { PreciosMasivoPage } from './PreciosMasivoPage'
+import { tienePermiso, type Permiso } from '../../../shared/permissions'
 
 type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios' | 'promociones' | 'precios'
 
-const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string; adminOnly?: boolean }[] = [
-  { key: 'pos',         label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1'  },
-  { key: 'productos',   label: 'Productos',       icon: '📦', shortcut: 'F2',  fkey: 'F2'  },
-  { key: 'stock',       label: 'Stock',           icon: '📊', shortcut: 'F3',  fkey: 'F3'  },
-  { key: 'caja',        label: 'Caja',            icon: '💰', shortcut: 'F4',  fkey: 'F4'  },
-  { key: 'clientes',    label: 'Clientes',        icon: '👥', shortcut: 'F5',  fkey: 'F5'  },
-  { key: 'proveedores', label: 'Proveedores',     icon: '🏭', shortcut: 'F6',  fkey: 'F6'  },
-  { key: 'reportes',    label: 'Reportes',        icon: '📈', shortcut: 'F7',  fkey: 'F7'  },
-  { key: 'usuarios',    label: 'Usuarios',        icon: '👤', shortcut: 'F8',  fkey: 'F8',  adminOnly: true },
-  { key: 'promociones', label: 'Promociones',     icon: '🏷️', shortcut: 'F9',  fkey: 'F9'  },
-  { key: 'precios',     label: 'Precios masivos', icon: '💲', shortcut: '',    fkey: '',    adminOnly: true },
-  { key: 'config',      label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10' },
+const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string; permiso: Permiso }[] = [
+  { key: 'pos',         label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1',  permiso: 'pos:usar' },
+  { key: 'productos',   label: 'Productos',       icon: '📦', shortcut: 'F2',  fkey: 'F2',  permiso: 'productos:gestionar' },
+  { key: 'stock',       label: 'Stock',           icon: '📊', shortcut: 'F3',  fkey: 'F3',  permiso: 'stock:ajustar' },
+  { key: 'caja',        label: 'Caja',            icon: '💰', shortcut: 'F4',  fkey: 'F4',  permiso: 'caja:abrir' },
+  { key: 'clientes',    label: 'Clientes',        icon: '👥', shortcut: 'F5',  fkey: 'F5',  permiso: 'clientes:gestionar' },
+  { key: 'proveedores', label: 'Proveedores',     icon: '🏭', shortcut: 'F6',  fkey: 'F6',  permiso: 'proveedores:gestionar' },
+  { key: 'reportes',    label: 'Reportes',        icon: '📈', shortcut: 'F7',  fkey: 'F7',  permiso: 'reportes:ver' },
+  { key: 'usuarios',    label: 'Usuarios',        icon: '👤', shortcut: 'F8',  fkey: 'F8',  permiso: 'usuarios:gestionar' },
+  { key: 'promociones', label: 'Promociones',     icon: '🏷️', shortcut: 'F9',  fkey: 'F9',  permiso: 'promociones:gestionar' },
+  { key: 'precios',     label: 'Precios masivos', icon: '💲', shortcut: '',    fkey: '',    permiso: 'precios:actualizar' },
+  { key: 'config',      label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10', permiso: 'config:gestionar' },
 ]
 
 export function MainLayout(): JSX.Element {
@@ -33,16 +34,25 @@ export function MainLayout(): JSX.Element {
   const { usuario, logout } = useAuthStore()
 
   const handleKey = useCallback((e: KeyboardEvent) => {
-    const item = NAV_ITEMS.find((n) => n.fkey === e.key)
+    const item = NAV_ITEMS.find((n) => n.fkey === e.key && tienePermiso(usuario, n.permiso))
     if (item) { e.preventDefault(); setSection(item.key) }
-  }, [])
+  }, [usuario])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleKey])
 
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || usuario?.rol === 'admin')
+  const visibleItems = useMemo(
+    () => NAV_ITEMS.filter(item => tienePermiso(usuario, item.permiso)),
+    [usuario]
+  )
+
+  useEffect(() => {
+    if (visibleItems.length > 0 && !visibleItems.some((item) => item.key === section)) {
+      setSection(visibleItems[0].key)
+    }
+  }, [visibleItems, section])
 
   return (
     <div className="flex h-screen bg-slate-100">

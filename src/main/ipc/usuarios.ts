@@ -1,6 +1,7 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { Usuario } from '../../shared/types'
+import { registrarAuditoria } from './auditoria'
 
 export function registerUsuariosHandlers(): void {
   handle('usuarios:login', ({ pin }) => {
@@ -27,6 +28,12 @@ export function registerUsuariosHandlers(): void {
     const result = db.prepare(
       'INSERT INTO usuarios (negocio_id, nombre, pin, rol) VALUES (?, ?, ?, ?)'
     ).run(data.negocioId, data.nombre, data.pin, data.rol)
+    registrarAuditoria(db, {
+      accion: 'usuario_creado',
+      tabla: 'usuarios',
+      referenciaId: Number(result.lastInsertRowid),
+      detalle: { nombre: data.nombre, rol: data.rol },
+    })
     const row = db.prepare('SELECT * FROM usuarios WHERE id = ?').get(result.lastInsertRowid)
     return mapUsuario(row as Record<string, unknown>)
   })

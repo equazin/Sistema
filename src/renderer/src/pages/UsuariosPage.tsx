@@ -5,7 +5,7 @@ import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
 import { Badge } from '../components/ui/Badge'
 import { useAuthStore } from '../stores/auth.store'
-import type { Usuario, RolUsuario } from '../../../shared/types'
+import type { AuditoriaEntry, Usuario, RolUsuario } from '../../../shared/types'
 
 const ROL_LABELS: Record<RolUsuario, string> = {
   admin: 'Administrador',
@@ -27,6 +27,7 @@ export function UsuariosPage(): JSX.Element {
   const { usuario: usuarioActual } = useAuthStore()
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [auditoria, setAuditoria] = useState<AuditoriaEntry[]>([])
   const [modalMode, setModalMode] = useState<ModalMode>(null)
   const [usuarioSel, setUsuarioSel] = useState<Usuario | null>(null)
 
@@ -41,8 +42,12 @@ export function UsuariosPage(): JSX.Element {
   const cargar = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await invoke('usuarios:listAll', {})
+      const [res, audit] = await Promise.all([
+        invoke('usuarios:listAll', {}),
+        invoke('auditoria:list', { limit: 30 }),
+      ])
       setUsuarios(res)
+      setAuditoria(audit)
     } finally { setIsLoading(false) }
   }, [])
 
@@ -175,6 +180,40 @@ export function UsuariosPage(): JSX.Element {
         </table>
       </div>
 
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+          <h2 className="font-semibold text-slate-700">Auditoría reciente</h2>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-white border-b border-slate-200">
+            <tr>
+              <th className="text-left px-4 py-3 text-slate-600 font-semibold">Fecha</th>
+              <th className="text-left px-4 py-3 text-slate-600 font-semibold">Usuario</th>
+              <th className="text-left px-4 py-3 text-slate-600 font-semibold">Acción</th>
+              <th className="text-left px-4 py-3 text-slate-600 font-semibold">Referencia</th>
+            </tr>
+          </thead>
+          <tbody>
+            {auditoria.length === 0 && (
+              <tr><td colSpan={4} className="text-center py-6 text-slate-400">Sin eventos registrados</td></tr>
+            )}
+            {auditoria.map((a) => (
+              <tr key={a.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <td className="px-4 py-3 text-slate-500">{new Date(a.fecha).toLocaleString('es-AR')}</td>
+                <td className="px-4 py-3 text-slate-700">{a.nombreUsuario ?? 'Sistema'}</td>
+                <td className="px-4 py-3">
+                  <p className="font-medium text-slate-800">{formatAccion(a.accion)}</p>
+                  {a.detalle && <p className="text-xs text-slate-400 truncate max-w-md">{formatDetalle(a.detalle)}</p>}
+                </td>
+                <td className="px-4 py-3 text-slate-500">
+                  {a.tabla ? `${a.tabla}${a.referenciaId ? ` #${a.referenciaId}` : ''}` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
       <Modal
         isOpen={modalMode !== null}
         onClose={() => setModalMode(null)}
@@ -242,5 +281,23 @@ function getRolDescription(rol: RolUsuario): string {
     case 'encargado': return 'Puede ver reportes, anular ventas y gestionar stock.'
     case 'cajero': return 'Acceso al POS, caja y consulta de productos.'
     case 'lectura': return 'Solo puede consultar información, sin modificar.'
+  }
+}
+
+function formatAccion(accion: string): string {
+  return accion
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function formatDetalle(detalle: string): string {
+  try {
+    const parsed = JSON.parse(detalle) as Record<string, unknown>
+    return Object.entries(parsed)
+      .map(([key, value]) => `${key}: ${String(value)}`)
+      .join(' · ')
+  } catch {
+    return detalle
   }
 }

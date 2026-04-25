@@ -1,6 +1,8 @@
 import { handle } from './base'
 import { getSqlite } from '../db/database'
 import type { MovimientoStock } from '../../shared/types'
+import { assertPermisoUsuario } from './permisos'
+import { registrarAuditoria } from './auditoria'
 
 export function registerStockHandlers(): void {
   handle('stock:movimientos', ({ productoId, limit = 100 }) => {
@@ -15,6 +17,7 @@ export function registerStockHandlers(): void {
 
   handle('stock:ajustar', ({ productoId, cantidad, motivo, usuarioId }) => {
     const db = getSqlite()
+    assertPermisoUsuario(db, usuarioId, 'stock:ajustar')
     const producto = db.prepare('SELECT stock_actual FROM productos WHERE id = ?').get(productoId) as { stock_actual: number } | undefined
     if (!producto) throw new Error(`Producto ${productoId} no encontrado`)
 
@@ -29,10 +32,13 @@ export function registerStockHandlers(): void {
 
       db.prepare("UPDATE productos SET stock_actual = ?, updated_at = datetime('now','localtime') WHERE id = ?").run(cantidad, productoId)
 
-      db.prepare(`
-        INSERT INTO audit_log (usuario_id, accion, tabla, referencia_id, detalle)
-        VALUES (?, 'ajuste_stock', 'productos', ?, ?)
-      `).run(usuarioId, productoId, `Ajuste de ${cantidadAnterior} → ${cantidad}. Motivo: ${motivo}`)
+      registrarAuditoria(db, {
+        usuarioId,
+        accion: 'ajuste_stock',
+        tabla: 'productos',
+        referenciaId: productoId,
+        detalle: { cantidadAnterior, cantidadNueva: cantidad, motivo },
+      })
     })()
   })
 }
