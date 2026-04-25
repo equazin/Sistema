@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { Button } from '../components/ui/Button'
 import { formatPrecio } from '../lib/format'
 import { invoke } from '../lib/api'
+import { QRMercadoPagoModal } from '../components/QRMercadoPagoModal'
 import type { Producto, MedioPago } from '../../../shared/types'
 
 const MEDIOS_PAGO: { key: MedioPago; label: string; icon: string }[] = [
@@ -20,9 +21,9 @@ export function PuntoVentaPage(): JSX.Element {
   const { usuario } = useAuthStore()
   const { turnoActual } = useCajaStore()
   const {
-    items, pagos, descuentoTotal,
+    items, pagos, descuentoTotal, promocionesAplicadas,
     agregarProducto, quitarItem, actualizarCantidad,
-    agregarPago, completarVenta, resetVenta,
+    agregarPago, completarVenta, resetVenta, calcularPromociones,
     subtotal, total,
     isLoading, ventaCompletada,
   } = useVentaStore()
@@ -33,6 +34,7 @@ export function PuntoVentaPage(): JSX.Element {
   const [mostrarPago, setMostrarPago] = useState(false)
   const [efectivoIngresado, setEfectivoIngresado] = useState('')
   const [_medioPagoActivo, setMedioPagoActivo] = useState<MedioPago>('efectivo')
+  const [mostrarQRMP, setMostrarQRMP] = useState(false)
   const busquedaRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -230,6 +232,16 @@ export function PuntoVentaPage(): JSX.Element {
                 <span>− {formatPrecio(descuentoTotal)}</span>
               </div>
             )}
+            {promocionesAplicadas.length > 0 && (
+              <div className="mb-1">
+                {promocionesAplicadas.map((p) => (
+                  <div key={p.promocionId} className="flex justify-between text-xs text-green-500">
+                    <span>🏷️ {p.nombre}</span>
+                    <span>− {formatPrecio(p.descuento)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="flex justify-between text-2xl font-bold text-slate-800 border-t border-slate-100 pt-2 mt-2">
               <span>TOTAL</span>
               <span className="text-blue-600">{formatPrecio(total())}</span>
@@ -237,6 +249,24 @@ export function PuntoVentaPage(): JSX.Element {
           </div>
         )}
       </div>
+
+      {/* QR MercadoPago modal */}
+      {mostrarQRMP && (
+        <QRMercadoPagoModal
+          monto={total()}
+          onConfirmado={() => {
+            agregarPago('qr_mp', total())
+            setMostrarQRMP(false)
+            void handleConfirmarPago()
+          }}
+          onCancelar={() => {
+            setMostrarQRMP(false)
+            // Remove any qr_mp payment that may have been added optimistically
+            // (none were — we only add after confirmed — so just reset medio)
+            setMedioPagoActivo('efectivo')
+          }}
+        />
+      )}
 
       {/* Right: cobro panel */}
       <div className="w-72 flex flex-col gap-3">
@@ -272,7 +302,15 @@ export function PuntoVentaPage(): JSX.Element {
               {MEDIOS_PAGO.map((mp) => (
                 <button
                   key={mp.key}
-                  onClick={() => { setMedioPagoActivo(mp.key); agregarPago(mp.key, total()) }}
+                  onClick={() => {
+                    setMedioPagoActivo(mp.key)
+                    void calcularPromociones(mp.key)
+                    if (mp.key === 'qr_mp') {
+                      setMostrarQRMP(true)
+                    } else {
+                      agregarPago(mp.key, total())
+                    }
+                  }}
                   className={`flex flex-col items-center py-3 rounded-xl border-2 text-sm font-semibold transition-colors ${
                     pagos.some((p) => p.medioPago === mp.key)
                       ? 'border-blue-500 bg-blue-50 text-blue-700'

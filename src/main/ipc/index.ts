@@ -10,6 +10,9 @@ import { registerClientesHandlers } from './clientes'
 import { registerProveedoresHandlers } from './proveedores'
 import { registerReportesHandlers } from './reportes'
 import { registerImpresionHandlers } from './impresion'
+import { registerMercadoPagoHandlers } from './mercadopago'
+import { registerPromocionesHandlers } from './promociones'
+import { registerPreciosHandlers } from './precios'
 
 export function registerAllHandlers(): void {
   registerProductosHandlers()
@@ -24,4 +27,7 @@ export function registerAllHandlers(): void {
   registerProveedoresHandlers()
   registerReportesHandlers()
   registerImpresionHandlers()
+  registerMercadoPagoHandlers()
+  registerPromocionesHandlers()
+  registerPreciosHandlers()
 }

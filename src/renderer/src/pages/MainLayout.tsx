@@ -9,8 +9,10 @@ import { ReportesPage } from './ReportesPage'
 import { ClientesPage } from './ClientesPage'
 import { ProveedoresPage } from './ProveedoresPage'
 import { UsuariosPage } from './UsuariosPage'
+import { PromocionesPage } from './PromocionesPage'
+import { PreciosMasivoPage } from './PreciosMasivoPage'
 
-type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios'
+type Section = 'pos' | 'productos' | 'stock' | 'caja' | 'config' | 'reportes' | 'clientes' | 'proveedores' | 'usuarios' | 'promociones' | 'precios'
 
 const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; fkey: string; adminOnly?: boolean }[] = [
   { key: 'pos',         label: 'Punto de Venta', icon: '🛒', shortcut: 'F1',  fkey: 'F1'  },
@@ -21,6 +23,8 @@ const NAV_ITEMS: { key: Section; label: string; icon: string; shortcut: string; 
   { key: 'proveedores', label: 'Proveedores',     icon: '🏭', shortcut: 'F6',  fkey: 'F6'  },
   { key: 'reportes',    label: 'Reportes',        icon: '📈', shortcut: 'F7',  fkey: 'F7'  },
   { key: 'usuarios',    label: 'Usuarios',        icon: '👤', shortcut: 'F8',  fkey: 'F8',  adminOnly: true },
+  { key: 'promociones', label: 'Promociones',     icon: '🏷️', shortcut: 'F9',  fkey: 'F9'  },
+  { key: 'precios',     label: 'Precios masivos', icon: '💲', shortcut: '',    fkey: '',    adminOnly: true },
   { key: 'config',      label: 'Configuración',   icon: '⚙️', shortcut: 'F10', fkey: 'F10' },
 ]
 
@@ -88,6 +92,8 @@ export function MainLayout(): JSX.Element {
         {section === 'proveedores' && <ProveedoresPage />}
         {section === 'reportes'    && <ReportesPage />}
         {section === 'usuarios'    && <UsuariosPage />}
+        {section === 'promociones' && <PromocionesPage />}
+        {section === 'precios'     && <PreciosMasivoPage />}
         {section === 'config'      && <ConfigPage />}
       </main>
     </div>

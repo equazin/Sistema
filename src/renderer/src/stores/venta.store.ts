@@ -6,10 +6,17 @@ export interface ItemCarrito extends ItemVenta {
   producto: Producto
 }
 
+interface PromocionAplicada {
+  promocionId: number
+  nombre: string
+  descuento: number
+}
+
 interface VentaState {
   items: ItemCarrito[]
   pagos: PagoVenta[]
   descuentoTotal: number
+  promocionesAplicadas: PromocionAplicada[]
   isLoading: boolean
   ventaCompletada: number | null
 
@@ -19,6 +26,7 @@ interface VentaState {
   setDescuento: (descuento: number) => void
   agregarPago: (medioPago: MedioPago, monto: number) => void
   quitarPago: (medioPago: MedioPago) => void
+  calcularPromociones: (medioPago: string) => Promise<void>
   completarVenta: (turnoId: number, sucursalId: number, usuarioId: number) => Promise<void>
   resetVenta: () => void
 
@@ -33,6 +41,7 @@ export const useVentaStore = create<VentaState>((set, get) => ({
   items: [],
   pagos: [],
   descuentoTotal: 0,
+  promocionesAplicadas: [],
   isLoading: false,
   ventaCompletada: null,
 
@@ -105,6 +114,32 @@ export const useVentaStore = create<VentaState>((set, get) => ({
     set((state) => ({ pagos: state.pagos.filter((p) => p.medioPago !== medioPago) }))
   },
 
+  calcularPromociones: async (medioPago) => {
+    const { items } = get()
+    if (items.length === 0) {
+      set({ descuentoTotal: 0, promocionesAplicadas: [] })
+      return
+    }
+    try {
+      const resultado = await invoke('promociones:calcular', {
+        items: items.map((i) => ({
+          productoId: i.productoId,
+          cantidad: i.cantidad,
+          precioUnitario: i.precioUnitario,
+          categoriaId: i.producto.categoriaId,
+        })),
+        medioPago,
+      })
+      set({
+        descuentoTotal: resultado.descuentoTotal,
+        promocionesAplicadas: resultado.detalle,
+      })
+    } catch {
+      // Si falla el cálculo de promociones, no bloqueamos la venta
+      set({ descuentoTotal: 0, promocionesAplicadas: [] })
+    }
+  },
+
   completarVenta: async (turnoId, sucursalId, usuarioId) => {
     const { items, pagos, descuentoTotal } = get()
     if (items.length === 0) throw new Error('No hay productos en la venta')
@@ -132,6 +167,7 @@ export const useVentaStore = create<VentaState>((set, get) => ({
     items: [],
     pagos: [],
     descuentoTotal: 0,
+    promocionesAplicadas: [],
     ventaCompletada: null,
     isLoading: false,
   }),

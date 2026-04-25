@@ -4,6 +4,12 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import type { Negocio } from '../../../shared/types'
 
+type MpFormData = {
+  accessToken: string
+  posId: string
+  sucursalId: string
+}
+
 type FormData = {
   nombre: string
   razonSocial: string
@@ -30,11 +36,20 @@ export function ConfigPage(): JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  // MercadoPago config state
+  const [mpForm, setMpForm] = useState<MpFormData>({ accessToken: '', posId: '', sucursalId: '' })
+  const [isSavingMp, setIsSavingMp] = useState(false)
+  const [savedMp, setSavedMp] = useState(false)
+  const [mpError, setMpError] = useState<string | null>(null)
+
   useEffect(() => {
     invoke('negocio:get', {}).then((n) => {
       if (n) setForm(toForm(n))
       setIsLoading(false)
     })
+    invoke('config:mp:get', {}).then((mp) => {
+      if (mp) setMpForm({ accessToken: mp.accessToken, posId: mp.posId, sucursalId: mp.sucursalId })
+    }).catch(() => { /* no mp config yet */ })
   }, [])
 
   const set = useCallback(<K extends keyof FormData>(key: K, value: FormData[K]) => {
@@ -53,6 +68,25 @@ export function ConfigPage(): JSX.Element {
       setIsSaving(false)
     }
   }, [form])
+
+  const setMp = useCallback(<K extends keyof MpFormData>(key: K, value: MpFormData[K]) => {
+    setMpForm((prev) => ({ ...prev, [key]: value }))
+    setSavedMp(false)
+    setMpError(null)
+  }, [])
+
+  const handleSaveMp = useCallback(async () => {
+    setIsSavingMp(true)
+    setMpError(null)
+    try {
+      await invoke('config:mp:set', mpForm)
+      setSavedMp(true)
+    } catch (err) {
+      setMpError(err instanceof Error ? err.message : 'Error al guardar')
+    } finally {
+      setIsSavingMp(false)
+    }
+  }, [mpForm])
 
   if (isLoading) {
     return <div className="flex items-center justify-center h-full text-slate-400">Cargando...</div>
@@ -128,6 +162,49 @@ export function ConfigPage(): JSX.Element {
           <InfoRow label="Versión" value="1.0.0 (Fase 1 MVP)" />
           <InfoRow label="Base de datos" value="SQLite + WAL mode" />
           <InfoRow label="PIN por defecto" value="1234 (cambiarlo en producción)" />
+        </div>
+      </div>
+
+      <div className="mt-6 bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="font-semibold text-slate-700 mb-1">MercadoPago QR</h2>
+          <p className="text-xs text-slate-500">
+            Configurá las credenciales de tu cuenta de MercadoPago para habilitar pagos con QR dinámico.
+          </p>
+        </div>
+
+        <Input
+          label="Access Token"
+          value={mpForm.accessToken}
+          onChange={(e) => setMp('accessToken', e.target.value)}
+          placeholder="APP_USR-..."
+          type="password"
+        />
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="POS ID"
+            value={mpForm.posId}
+            onChange={(e) => setMp('posId', e.target.value)}
+            placeholder="CAJA001"
+          />
+          <Input
+            label="Sucursal ID"
+            value={mpForm.sucursalId}
+            onChange={(e) => setMp('sucursalId', e.target.value)}
+            placeholder="SUCURSAL001"
+          />
+        </div>
+
+        {mpError !== null && (
+          <p className="text-red-500 text-sm">{mpError}</p>
+        )}
+
+        <div className="flex items-center gap-4 pt-2 border-t border-slate-100">
+          <Button onClick={handleSaveMp} disabled={isSavingMp}>
+            {isSavingMp ? 'Guardando...' : 'Guardar credenciales'}
+          </Button>
+          {savedMp && <span className="text-green-600 text-sm font-medium">✓ Guardado</span>}
         </div>
       </div>
     </div>

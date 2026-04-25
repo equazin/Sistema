@@ -251,3 +251,45 @@ export interface ProductoStockValorizado {
   valorVenta: number
   bajoMinimo: boolean
 }
+
+export interface PreviewPrecio {
+  productoId: number
+  codigoBarras: string | null
+  nombre: string
+  precioActual: number
+  precioNuevo: number
+  diferencia: number
+  diferenciaPct: number
+}
+
+export interface ActualizacionMasiva {
+  tipo: 'porcentaje' | 'csv'
+  porcentaje?: number
+  redondear?: 'ninguno' | 'entero' | 'decena' | 'centena'
+  soloCategoria?: number | null
+  soloActivos?: boolean
+  items?: { codigoBarras: string; precioVenta: number }[]
+}
+
+export type TipoPromocion =
+  | 'porcentaje_producto'
+  | 'porcentaje_categoria'
+  | 'porcentaje_medio_pago'
+  | '2x1'
+  | '3x2'
+  | 'monto_fijo'
+
+export interface Promocion {
+  id: number
+  negocioId: number
+  nombre: string
+  tipo: TipoPromocion
+  valor: number
+  productoId: number | null
+  categoriaId: number | null
+  medioPago: string | null
+  vigenciaDesde: string | null
+  vigenciaHasta: string | null
+  activa: boolean
+  createdAt: string
+}

@@ -208,6 +208,67 @@ export interface IpcChannelMap {
       totalValorVenta: number
     }
   }
+  // MercadoPago QR
+  'mp:crearOrden': {
+    request: { monto: number; descripcion: string; externalReference: string }
+    response: { orderId: string; qrData: string; ticketUrl: string }
+  }
+  'mp:consultarEstado': {
+    request: { orderId: string }
+    response: { estado: 'pending' | 'approved' | 'rejected' | 'cancelled' }
+  }
+  'mp:cancelarOrden': {
+    request: { orderId: string }
+    response: void
+  }
+  'config:mp:get': {
+    request: Record<string, never>
+    response: { accessToken: string; posId: string; sucursalId: string } | null
+  }
+  'config:mp:set': {
+    request: { accessToken: string; posId: string; sucursalId: string }
+    response: void
+  }
+  // Promociones
+  'promociones:list': {
+    request: Record<string, never>
+    response: import('./types').Promocion[]
+  }
+  'promociones:create': {
+    request: Omit<import('./types').Promocion, 'id' | 'createdAt'>
+    response: import('./types').Promocion
+  }
+  'promociones:update': {
+    request: { id: number } & Partial<import('./types').Promocion>
+    response: import('./types').Promocion
+  }
+  'promociones:delete': {
+    request: { id: number }
+    response: void
+  }
+  'promociones:calcular': {
+    request: {
+      items: { productoId: number; cantidad: number; precioUnitario: number; categoriaId: number | null }[]
+      medioPago: string
+    }
+    response: {
+      descuentoTotal: number
+      detalle: { promocionId: number; nombre: string; descuento: number }[]
+    }
+  }
+  // Actualización masiva de precios
+  'precios:preview': {
+    request: import('./types').ActualizacionMasiva
+    response: import('./types').PreviewPrecio[]
+  }
+  'precios:aplicar': {
+    request: import('./types').ActualizacionMasiva & { usuarioId: number }
+    response: { actualizados: number }
+  }
+  'precios:parsearCSV': {
+    request: { contenido: string }
+    response: { items: { codigoBarras: string; precioVenta: number }[]; errores: string[] }
+  }
 }
 
 export type IpcChannels = IpcChannelMap

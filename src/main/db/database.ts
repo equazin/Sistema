@@ -246,6 +246,21 @@ function runMigrations(): void {
       observacion TEXT,
       fecha TEXT NOT NULL DEFAULT (datetime('now','localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS promociones (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      negocio_id INTEGER NOT NULL REFERENCES negocios(id),
+      nombre TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      valor REAL NOT NULL DEFAULT 0,
+      producto_id INTEGER REFERENCES productos(id),
+      categoria_id INTEGER REFERENCES categorias(id),
+      medio_pago TEXT,
+      vigencia_desde TEXT,
+      vigencia_hasta TEXT,
+      activa INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
   `)
 }
 
