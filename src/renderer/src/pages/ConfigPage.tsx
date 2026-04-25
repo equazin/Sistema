@@ -56,6 +56,12 @@ export function ConfigPage(): JSX.Element {
   const [plan, setPlan] = useState<PlanTipo>('free')
   const [modulos, setModulos] = useState<Record<ModuloKey, boolean>>({} as Record<ModuloKey, boolean>)
 
+  const [gdriveConfigured, setGdriveConfigured] = useState(false)
+  const [gdriveForm, setGdriveForm] = useState({ clientId: '', clientSecret: '', folderId: '' })
+  const [gdriveCode, setGdriveCode] = useState('')
+  const [gdriveMsg, setGdriveMsg] = useState<string | null>(null)
+  const [gdriveUploading, setGdriveUploading] = useState(false)
+
   useEffect(() => {
     invoke('negocio:get', {}).then((n) => { if (n) setForm(toForm(n)); setIsLoading(false) })
     invoke('config:mp:get', {}).then((mp) => { if (mp) setMpForm(mp) }).catch(() => {})
@@ -64,6 +70,7 @@ export function ConfigPage(): JSX.Element {
     invoke('backup:getConfig', {}).then((cfg) => { if (cfg) setBackupConfig(cfg) }).catch(() => {})
     invoke('backup:listar', {}).then(setBackups).catch(() => {})
     invoke('api:getConfig', {}).then(setApiConfig).catch(() => {})
+    invoke('gdrive:getConfig', {}).then(({ configured }) => setGdriveConfigured(configured)).catch(() => {})
     invoke('plan:get', {}).then(({ plan: p, modulos: m }) => {
       setPlan(p as PlanTipo)
       setModulos(m as Record<ModuloKey, boolean>)
@@ -200,6 +207,50 @@ export function ConfigPage(): JSX.Element {
       alert(err instanceof Error ? err.message : 'Error al cambiar módulo')
     }
   }, [plan, modulos])
+
+  const handleGdriveSaveCredentials = useCallback(async () => {
+    setGdriveMsg(null)
+    try {
+      await invoke('gdrive:setCredentials', gdriveForm)
+      setGdriveMsg('✓ Credenciales guardadas')
+    } catch (err) {
+      setGdriveMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    }
+  }, [gdriveForm])
+
+  const handleGdriveAuth = useCallback(async () => {
+    setGdriveMsg(null)
+    try {
+      await invoke('gdrive:getAuthUrl', { clientId: gdriveForm.clientId, clientSecret: gdriveForm.clientSecret })
+      setGdriveMsg('Se abrió el navegador. Pegá el código de autorización abajo.')
+    } catch (err) {
+      setGdriveMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    }
+  }, [gdriveForm])
+
+  const handleGdriveExchangeCode = useCallback(async () => {
+    setGdriveMsg(null)
+    try {
+      await invoke('gdrive:exchangeCode', { code: gdriveCode.trim() })
+      setGdriveConfigured(true)
+      setGdriveCode('')
+      setGdriveMsg('✓ Autorizado correctamente')
+    } catch (err) {
+      setGdriveMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    }
+  }, [gdriveCode])
+
+  const handleGdriveBackup = useCallback(async () => {
+    setGdriveUploading(true); setGdriveMsg(null)
+    try {
+      const result = await invoke('gdrive:backupAndUpload', {})
+      setGdriveMsg(result.uploaded ? `✓ Backup subido: ${result.path.split(/[\\/]/).pop()}` : `✓ Backup local creado (no subido)`)
+    } catch (err) {
+      setGdriveMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    } finally {
+      setGdriveUploading(false)
+    }
+  }, [])
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdater({ estado: 'checking' })
@@ -424,6 +475,48 @@ export function ConfigPage(): JSX.Element {
         <div className="pt-2 border-t border-slate-100">
           <Button variant="outline" size="sm" onClick={handleApiSavePort} disabled={apiSaving}>Guardar puerto y acceso</Button>
         </div>
+      </div>
+
+      {/* Google Drive backup */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="font-semibold text-slate-700 mb-1">Backup en Google Drive</h2>
+          <p className="text-xs text-slate-500">Sube backups automáticamente a tu Google Drive. Requiere una app OAuth2 en Google Cloud Console.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${gdriveConfigured ? 'bg-green-500' : 'bg-slate-300'}`} />
+          <span className="text-sm text-slate-600">{gdriveConfigured ? 'Autorizado' : 'Sin autorizar'}</span>
+        </div>
+        <div className="flex flex-col gap-3">
+          <Input label="Client ID" value={gdriveForm.clientId} onChange={(e) => setGdriveForm((f) => ({ ...f, clientId: e.target.value }))} placeholder="xxxx.apps.googleusercontent.com" />
+          <Input label="Client Secret" value={gdriveForm.clientSecret} onChange={(e) => setGdriveForm((f) => ({ ...f, clientSecret: e.target.value }))} type="password" placeholder="GOCSPX-..." />
+          <Input label="ID de carpeta en Drive (opcional)" value={gdriveForm.folderId} onChange={(e) => setGdriveForm((f) => ({ ...f, folderId: e.target.value }))} placeholder="1BxiMVs0XRA..." />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleGdriveSaveCredentials}>Guardar credenciales</Button>
+          <Button variant="outline" size="sm" onClick={handleGdriveAuth}>Autorizar con Google</Button>
+        </div>
+        {gdriveMsg?.includes('código') && (
+          <div className="flex gap-2">
+            <input
+              value={gdriveCode}
+              onChange={(e) => setGdriveCode(e.target.value)}
+              placeholder="Pega aquí el código de autorización"
+              className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+            <Button size="sm" onClick={handleGdriveExchangeCode}>Confirmar</Button>
+          </div>
+        )}
+        {gdriveMsg && (
+          <p className={`text-sm font-medium ${gdriveMsg.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>{gdriveMsg}</p>
+        )}
+        {gdriveConfigured && (
+          <div className="pt-2 border-t border-slate-100">
+            <Button onClick={handleGdriveBackup} disabled={gdriveUploading} size="sm">
+              {gdriveUploading ? 'Subiendo...' : 'Hacer backup y subir a Drive'}
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Plan y módulos */}

@@ -17,6 +17,7 @@ import { registerBackupHandlers } from './backup'
 import { registerAuditoriaHandlers } from './auditoria'
 import { registerPlanHandlers } from './plan'
 import { registerApiConfigHandlers } from './api_config'
+import { registerGDriveHandlers } from './gdrive'
 
 export function registerAllHandlers(): void {
   registerProductosHandlers()
@@ -38,4 +39,5 @@ export function registerAllHandlers(): void {
   registerAuditoriaHandlers()
   registerPlanHandlers()
   registerApiConfigHandlers()
+  registerGDriveHandlers()
 }

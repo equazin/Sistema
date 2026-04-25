@@ -23,6 +23,7 @@
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.36.4",
     "electron-updater": "^6.8.3",
+    "googleapis": "^144.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.27.0",

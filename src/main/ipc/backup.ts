@@ -4,25 +4,26 @@ import { getSqlite } from '../db/database'
 import { join } from 'path'
 import { copyFileSync, mkdirSync, existsSync, readdirSync, unlinkSync, statSync } from 'fs'
 
+export function ejecutarBackup(destino?: string): { path: string; fecha: string } {
+  const dbPath = join(app.getPath('userData'), 'sistema-pos.db')
+  const dir = destino ?? join(app.getPath('userData'), 'backups')
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
+
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const dest = join(dir, `backup-${ts}.db`)
+  copyFileSync(dbPath, dest)
+
+  const archivos = readdirSync(dir)
+    .filter(f => f.startsWith('backup-') && f.endsWith('.db'))
+    .map(f => ({ f, t: statSync(join(dir, f)).mtimeMs }))
+    .sort((a, b) => b.t - a.t)
+  archivos.slice(30).forEach(({ f }) => { try { unlinkSync(join(dir, f)) } catch { /* ignore */ } })
+
+  return { path: dest, fecha: new Date().toISOString() }
+}
+
 export function registerBackupHandlers(): void {
-  handle('backup:ejecutar', ({ destino }) => {
-    const dbPath = join(app.getPath('userData'), 'sistema-pos.db')
-    const dir = destino ?? join(app.getPath('userData'), 'backups')
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const dest = join(dir, `backup-${ts}.db`)
-    copyFileSync(dbPath, dest)
-
-    // Conservar solo los últimos 30 backups
-    const archivos = readdirSync(dir)
-      .filter(f => f.startsWith('backup-') && f.endsWith('.db'))
-      .map(f => ({ f, t: statSync(join(dir, f)).mtimeMs }))
-      .sort((a, b) => b.t - a.t)
-    archivos.slice(30).forEach(({ f }) => { try { unlinkSync(join(dir, f)) } catch { /* ignore */ } })
-
-    return { path: dest, fecha: new Date().toISOString() }
-  })
+  handle('backup:ejecutar', ({ destino }) => ejecutarBackup(destino))
 
   handle('backup:getConfig', () => {
     const db = getSqlite()

@@ -309,6 +309,31 @@ export interface IpcChannelMap {
     request: Record<string, never>
     response: { nombre: string; path: string; tamaño: number; fecha: string }[]
   }
+  // Google Drive backup
+  'gdrive:getConfig': {
+    request: Record<string, never>
+    response: { configured: boolean; folderId: string }
+  }
+  'gdrive:setCredentials': {
+    request: { clientId: string; clientSecret: string; folderId: string }
+    response: void
+  }
+  'gdrive:getAuthUrl': {
+    request: { clientId: string; clientSecret: string }
+    response: { url: string }
+  }
+  'gdrive:exchangeCode': {
+    request: { code: string }
+    response: void
+  }
+  'gdrive:upload': {
+    request: { backupPath: string }
+    response: { fileId: string; name: string; size: number }
+  }
+  'gdrive:backupAndUpload': {
+    request: { destino?: string }
+    response: { path: string; fecha: string; uploaded: boolean }
+  }
   // Plan y módulos
   'plan:get': {
     request: Record<string, never>
