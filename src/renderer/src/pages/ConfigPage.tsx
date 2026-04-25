@@ -3,9 +3,11 @@ import { invoke } from '../lib/api'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import type { ImpresionConfig, ImpresoraSistema, Negocio, TicketAncho } from '../../../shared/types'
+import { MODULOS, type ModuloKey, type PlanTipo } from '../../../shared/modules'
 
 type MpFormData = { accessToken: string; posId: string; sucursalId: string }
 type BackupConfig = { carpeta: string; frecuencia: 'diario' | 'semanal' | 'manual' }
+type ApiConfig = { enabled: boolean; port: number; apiKeyPreview: string; bindLocalhostOnly: boolean; running: boolean }
 type FormData = {
   nombre: string; razonSocial: string; cuit: string
   condicionAfip: Negocio['condicionAfip']; domicilio: string; telefono: string
@@ -46,6 +48,14 @@ export function ConfigPage(): JSX.Element {
 
   const [updater, setUpdater] = useState<UpdaterInfo>({ estado: 'idle' })
 
+  const [apiConfig, setApiConfig] = useState<ApiConfig>({ enabled: false, port: 3001, apiKeyPreview: '', bindLocalhostOnly: false, running: false })
+  const [apiSaving, setApiSaving] = useState(false)
+  const [apiRawKey, setApiRawKey] = useState<string | null>(null)
+  const [apiMsg, setApiMsg] = useState<string | null>(null)
+
+  const [plan, setPlan] = useState<PlanTipo>('free')
+  const [modulos, setModulos] = useState<Record<ModuloKey, boolean>>({} as Record<ModuloKey, boolean>)
+
   useEffect(() => {
     invoke('negocio:get', {}).then((n) => { if (n) setForm(toForm(n)); setIsLoading(false) })
     invoke('config:mp:get', {}).then((mp) => { if (mp) setMpForm(mp) }).catch(() => {})
@@ -53,6 +63,11 @@ export function ConfigPage(): JSX.Element {
     invoke('config:impresion:listPrinters', {}).then(setImpresoras).catch(() => {})
     invoke('backup:getConfig', {}).then((cfg) => { if (cfg) setBackupConfig(cfg) }).catch(() => {})
     invoke('backup:listar', {}).then(setBackups).catch(() => {})
+    invoke('api:getConfig', {}).then(setApiConfig).catch(() => {})
+    invoke('plan:get', {}).then(({ plan: p, modulos: m }) => {
+      setPlan(p as PlanTipo)
+      setModulos(m as Record<ModuloKey, boolean>)
+    }).catch(() => {})
 
     const unsub = window.api.on('updater:status', (data) => {
       setUpdater(data as UpdaterInfo)
@@ -123,6 +138,68 @@ export function ConfigPage(): JSX.Element {
       setBackupLoading(false)
     }
   }, [backupConfig.carpeta])
+
+  const handleApiToggle = useCallback(async (enabled: boolean) => {
+    setApiSaving(true); setApiMsg(null)
+    try {
+      await invoke('api:setConfig', { enabled, port: apiConfig.port, bindLocalhostOnly: apiConfig.bindLocalhostOnly })
+      const fresh = await invoke('api:getConfig', {})
+      setApiConfig(fresh)
+      setApiMsg(enabled ? '✓ API iniciada' : '✓ API detenida')
+    } catch (err) {
+      setApiMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    } finally {
+      setApiSaving(false)
+    }
+  }, [apiConfig])
+
+  const handleApiSavePort = useCallback(async () => {
+    setApiSaving(true); setApiMsg(null)
+    try {
+      await invoke('api:setConfig', { enabled: apiConfig.enabled, port: apiConfig.port, bindLocalhostOnly: apiConfig.bindLocalhostOnly })
+      const fresh = await invoke('api:getConfig', {})
+      setApiConfig(fresh)
+      setApiMsg('✓ Guardado')
+    } catch (err) {
+      setApiMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    } finally {
+      setApiSaving(false)
+    }
+  }, [apiConfig])
+
+  const handleRotateKey = useCallback(async () => {
+    if (!confirm('¿Generar nueva API key? La clave anterior dejará de funcionar.')) return
+    setApiMsg(null)
+    try {
+      const { rawKey, preview } = await invoke('api:rotateKey', {})
+      setApiRawKey(rawKey)
+      setApiConfig((c) => ({ ...c, apiKeyPreview: preview }))
+    } catch (err) {
+      setApiMsg(`Error: ${err instanceof Error ? err.message : 'Error desconocido'}`)
+    }
+  }, [])
+
+  const handlePlanChange = useCallback(async (newPlan: PlanTipo) => {
+    try {
+      await invoke('plan:set', { plan: newPlan })
+      const { plan: p, modulos: m } = await invoke('plan:get', {})
+      setPlan(p as PlanTipo)
+      setModulos(m as Record<ModuloKey, boolean>)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al cambiar plan')
+    }
+  }, [])
+
+  const handleModuloToggle = useCallback(async (key: ModuloKey, enabled: boolean) => {
+    const newOverrides = { ...modulos, [key]: enabled }
+    try {
+      await invoke('plan:set', { plan, overrides: newOverrides })
+      const { modulos: m } = await invoke('plan:get', {})
+      setModulos(m as Record<ModuloKey, boolean>)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error al cambiar módulo')
+    }
+  }, [plan, modulos])
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdater({ estado: 'checking' })
@@ -281,6 +358,111 @@ export function ConfigPage(): JSX.Element {
             </div>
           </details>
         )}
+      </div>
+
+      {/* API Local */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="font-semibold text-slate-700 mb-1">API Local</h2>
+          <p className="text-xs text-slate-500">Servidor REST para integración con app mobile u otros sistemas en la red local.</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${apiConfig.running ? 'bg-green-500' : 'bg-slate-300'}`} />
+            <span className="text-sm text-slate-700">{apiConfig.running ? `Activa en puerto ${apiConfig.port}` : 'Inactiva'}</span>
+          </div>
+          <Button
+            variant={apiConfig.enabled ? 'outline' : 'primary'}
+            size="sm"
+            disabled={apiSaving}
+            onClick={() => handleApiToggle(!apiConfig.enabled)}
+          >
+            {apiSaving ? '...' : apiConfig.enabled ? 'Detener' : 'Iniciar'}
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Puerto</label>
+            <input
+              type="number" min={1024} max={65535}
+              value={apiConfig.port}
+              onChange={(e) => setApiConfig((c) => ({ ...c, port: parseInt(e.target.value) || 3001 }))}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Acceso</label>
+            <select
+              value={apiConfig.bindLocalhostOnly ? 'local' : 'lan'}
+              onChange={(e) => setApiConfig((c) => ({ ...c, bindLocalhostOnly: e.target.value === 'local' }))}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="lan">Red local (LAN)</option>
+              <option value="local">Solo localhost</option>
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+          <div className="flex-1">
+            <p className="text-xs text-slate-500 mb-0.5">API Key</p>
+            <p className="text-sm font-mono text-slate-700">
+              {apiConfig.apiKeyPreview ? `${apiConfig.apiKeyPreview}••••••••` : 'Sin clave generada'}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={handleRotateKey}>Rotar clave</Button>
+        </div>
+        {apiRawKey && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs font-medium text-amber-700 mb-1">Copia esta clave ahora — no se mostrará de nuevo</p>
+            <p className="font-mono text-sm text-amber-900 break-all select-all">{apiRawKey}</p>
+            <button className="text-xs text-amber-600 mt-1 underline" onClick={() => setApiRawKey(null)}>Ocultar</button>
+          </div>
+        )}
+        {apiMsg && (
+          <p className={`text-sm font-medium ${apiMsg.startsWith('Error') ? 'text-red-500' : 'text-green-600'}`}>{apiMsg}</p>
+        )}
+        <div className="pt-2 border-t border-slate-100">
+          <Button variant="outline" size="sm" onClick={handleApiSavePort} disabled={apiSaving}>Guardar puerto y acceso</Button>
+        </div>
+      </div>
+
+      {/* Plan y módulos */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-5">
+        <div>
+          <h2 className="font-semibold text-slate-700 mb-1">Plan y módulos</h2>
+          <p className="text-xs text-slate-500">Habilita o deshabilita funcionalidades según el plan contratado.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-slate-700">Plan activo</label>
+          <select
+            value={plan}
+            onChange={(e) => handlePlanChange(e.target.value as PlanTipo)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-blue-500"
+          >
+            <option value="free">Free</option>
+            <option value="pro">Pro</option>
+            <option value="enterprise">Enterprise</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          {(Object.entries(MODULOS) as [ModuloKey, typeof MODULOS[ModuloKey]][]).map(([key, meta]) => (
+            <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50">
+              <div>
+                <p className="text-sm font-medium text-slate-700">{meta.label}</p>
+                <p className="text-xs text-slate-500">{meta.descripcion}</p>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={modulos[key] ?? false}
+                  onChange={(e) => handleModuloToggle(key, e.target.checked)}
+                  className="w-4 h-4 accent-blue-600"
+                />
+                <span className="text-xs text-slate-500">{modulos[key] ? 'On' : 'Off'}</span>
+              </label>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Actualizaciones */}

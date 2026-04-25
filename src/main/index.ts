@@ -4,6 +4,7 @@ import { initDatabase } from './db/database'
 import { registerAllHandlers } from './ipc'
 import { setupAutoUpdater } from './ipc/updater'
 import { iniciarBackupAutomatico } from './ipc/backup'
+import { startApiServerIfEnabled } from './api/server'
 
 function createWindow(): BrowserWindow {
   const isDev = !app.isPackaged
@@ -49,6 +50,7 @@ app.whenReady().then(() => {
   registerAllHandlers()
   setupAutoUpdater()
   iniciarBackupAutomatico()
+  startApiServerIfEnabled()
   createWindow()
 
   app.on('activate', () => {

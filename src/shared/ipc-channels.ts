@@ -309,6 +309,36 @@ export interface IpcChannelMap {
     request: Record<string, never>
     response: { nombre: string; path: string; tamaño: number; fecha: string }[]
   }
+  // Plan y módulos
+  'plan:get': {
+    request: Record<string, never>
+    response: { plan: string; modulos: Record<string, boolean> }
+  }
+  'plan:set': {
+    request: { plan: string; overrides?: Record<string, boolean> }
+    response: void
+  }
+  'plan:moduloEnabled': {
+    request: { key: string }
+    response: { enabled: boolean }
+  }
+  // API local
+  'api:getConfig': {
+    request: Record<string, never>
+    response: { enabled: boolean; port: number; apiKeyPreview: string; bindLocalhostOnly: boolean; running: boolean }
+  }
+  'api:setConfig': {
+    request: { enabled: boolean; port?: number; bindLocalhostOnly?: boolean }
+    response: void
+  }
+  'api:rotateKey': {
+    request: Record<string, never>
+    response: { rawKey: string; preview: string }
+  }
+  'api:status': {
+    request: Record<string, never>
+    response: { running: boolean }
+  }
   // Actualización masiva de precios
   'precios:preview': {
     request: import('./types').ActualizacionMasiva

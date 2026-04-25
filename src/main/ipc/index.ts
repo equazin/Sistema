@@ -15,6 +15,8 @@ import { registerPromocionesHandlers } from './promociones'
 import { registerPreciosHandlers } from './precios'
 import { registerBackupHandlers } from './backup'
 import { registerAuditoriaHandlers } from './auditoria'
+import { registerPlanHandlers } from './plan'
+import { registerApiConfigHandlers } from './api_config'
 
 export function registerAllHandlers(): void {
   registerProductosHandlers()
@@ -34,4 +36,6 @@ export function registerAllHandlers(): void {
   registerPreciosHandlers()
   registerBackupHandlers()
   registerAuditoriaHandlers()
+  registerPlanHandlers()
+  registerApiConfigHandlers()
 }
